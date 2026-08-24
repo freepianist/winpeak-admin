@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
 import { useWinPeakStats } from '@/app/(control-panel)/ops/api/hooks/useWinPeakStats';
 import { formatMoney } from '@/lib/money';
+import { playerAccountChip } from '@/lib/player-status';
 import type { LedgerItem, Player } from '@/app/(control-panel)/ops/api/types';
 
 const container = {
@@ -294,8 +295,8 @@ function WinPeakDashboardView() {
 											</Typography>
 											<Chip
 												size="small"
-												label={player.status.toLowerCase()}
-												color={player.status === 'ACTIVE' ? 'success' : 'error'}
+												label={playerAccountChip(player).label}
+												color={playerAccountChip(player).color}
 												variant="outlined"
 											/>
 										</div>

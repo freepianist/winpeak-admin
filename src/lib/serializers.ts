@@ -50,6 +50,7 @@ export function serializeUser(user: {
 	scorpioPlayerCode: number | null;
 	status: string;
 	notes: string | null;
+	emailVerifiedAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 	wallet?: {
@@ -68,6 +69,8 @@ export function serializeUser(user: {
 		displayName: `${user.firstName} ${user.lastName}`.trim(),
 		scorpioPlayerCode: user.scorpioPlayerCode,
 		status: user.status,
+		emailVerified: Boolean(user.emailVerifiedAt),
+		emailVerifiedAt: user.emailVerifiedAt?.toISOString() || null,
 		notes: user.notes || '',
 		createdAt: user.createdAt.toISOString(),
 		updatedAt: user.updatedAt.toISOString(),

@@ -20,7 +20,7 @@ if (process.env.NEXT_PUBLIC_BASE_URL) {
 const nextConfig: NextConfig = {
 	reactStrictMode: false,
 	poweredByHeader: false,
-	serverExternalPackages: ['@prisma/client', 'prisma', 'pg', '@prisma/adapter-pg', 'bcryptjs'],
+	serverExternalPackages: ['@prisma/client', 'prisma', 'pg', '@prisma/adapter-pg', 'bcryptjs', 'cloudinary'],
 	typescript: {
 		// Dangerously allow production builds to successfully complete even if
 		// your project has type errors.

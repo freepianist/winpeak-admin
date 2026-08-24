@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { usePlayers } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
 import type { Player } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { playerAccountChip } from '@/lib/player-status';
 
 function PlayersTable() {
 	const { data: players = [], isLoading } = usePlayers();
@@ -46,14 +47,17 @@ function PlayersTable() {
 			{
 				accessorKey: 'status',
 				header: 'Status',
-				Cell: ({ row }) => (
-					<Chip
-						size="small"
-						label={row.original.status.toLowerCase()}
-						color={row.original.status === 'ACTIVE' ? 'success' : 'error'}
-						variant="outlined"
-					/>
-				)
+				Cell: ({ row }) => {
+					const chip = playerAccountChip(row.original);
+					return (
+						<Chip
+							size="small"
+							label={chip.label}
+							color={chip.color}
+							variant="outlined"
+						/>
+					);
+				}
 			},
 			{
 				accessorKey: 'ledgerCount',

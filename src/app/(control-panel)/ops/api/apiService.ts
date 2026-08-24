@@ -59,7 +59,7 @@ export const winpeakApi = {
 	},
 	getBlogs: () => unwrap(api.get('winpeak/blogs').json<BlogPost[]>()),
 	getBlog: (id: string) => unwrap(api.get(`winpeak/blogs/${id}`).json<BlogPost>()),
-	uploadImage: (file: File, folder: 'blog' | 'authors') => {
+	uploadImage: (file: File, folder: 'blog' | 'authors' | 'stories') => {
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('folder', folder);

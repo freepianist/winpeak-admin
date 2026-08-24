@@ -8,6 +8,8 @@ export type Player = {
 	displayName: string;
 	scorpioPlayerCode: number | null;
 	status: PlayerStatus;
+	emailVerified: boolean;
+	emailVerifiedAt: string | null;
 	notes: string;
 	createdAt: string;
 	updatedAt: string;

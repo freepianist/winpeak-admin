@@ -27,6 +27,7 @@ import {
 } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
 import type { LedgerItem, WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { playerAccountChip } from '@/lib/player-status';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
 
@@ -258,8 +259,8 @@ function PlayerView() {
 							<Chip
 								className="mt-3"
 								size="small"
-								label={player.status.toLowerCase()}
-								color={player.status === 'ACTIVE' ? 'success' : 'error'}
+								label={playerAccountChip(player).label}
+								color={playerAccountChip(player).color}
 							/>
 						</Paper>
 						<Paper className="rounded-xl p-5 shadow-sm">
@@ -339,7 +340,12 @@ function PlayerView() {
 									<TextField
 										{...field}
 										select
-										label="Status"
+										label="Account status"
+										helperText={
+											player.emailVerified
+												? 'Email is verified'
+												: 'Email is not verified yet'
+										}
 										fullWidth
 									>
 										<MenuItem value="ACTIVE">Active</MenuItem>

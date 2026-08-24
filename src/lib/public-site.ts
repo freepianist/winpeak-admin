@@ -3,7 +3,7 @@ import path from 'path';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const UPLOAD_FOLDERS = new Set(['blog', 'authors']);
+const UPLOAD_FOLDERS = new Set(['blog', 'authors', 'stories']);
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export function findPublicSiteRoot() {
