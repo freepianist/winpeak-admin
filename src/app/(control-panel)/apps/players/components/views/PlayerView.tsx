@@ -108,6 +108,11 @@ function PlayerView() {
 				Cell: ({ row }) => formatMoney(row.original.amount, player?.currency)
 			},
 			{
+				id: 'destination',
+				header: 'Destination',
+				Cell: ({ row }) => row.original.payCurrency || row.original.payoutAddress || '—'
+			},
+			{
 				accessorKey: 'status',
 				header: 'Status',
 				Cell: ({ row }) => (
@@ -119,7 +124,9 @@ function PlayerView() {
 								? 'success'
 								: row.original.status === 'REJECTED'
 									? 'error'
-									: 'warning'
+									: row.original.status === 'PROCESSING'
+										? 'info'
+										: 'warning'
 						}
 						variant="outlined"
 					/>
@@ -142,7 +149,12 @@ function PlayerView() {
 								onClick={() =>
 									void updateRequest
 										.mutateAsync({ id: row.original.id, status: 'APPROVED' })
-										.then(() => enqueueSnackbar('Request approved', { variant: 'success' }))
+										.then((row) =>
+											enqueueSnackbar(
+												row.status === 'PROCESSING' ? 'Payout submitted' : 'Request approved',
+												{ variant: 'success' }
+											)
+										)
 										.catch((error: unknown) =>
 											enqueueSnackbar(
 												error instanceof Error ? error.message : 'Could not approve',

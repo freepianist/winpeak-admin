@@ -18,6 +18,19 @@ import { useUpdateWalletRequest, useWalletRequests } from '@/app/(control-panel)
 import type { WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
 
+function requestStatusColor(status: WalletRequest['status']) {
+	if (status === 'APPROVED') return 'success';
+	if (status === 'REJECTED') return 'error';
+	if (status === 'PROCESSING') return 'info';
+	return 'warning';
+}
+
+function shortAddress(value: string) {
+	if (!value) return '—';
+	if (value.length <= 16) return value;
+	return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
 		maxWidth: '100%!important'
@@ -58,19 +71,41 @@ function WalletRequestsView() {
 				Cell: ({ row }) => formatMoney(row.original.amount, row.original.currency)
 			},
 			{
+				id: 'destination',
+				header: 'Destination',
+				Cell: ({ row }) => (
+					<div>
+						<Typography className="text-sm">{row.original.payCurrency || '—'}</Typography>
+						<Typography
+							className="text-sm"
+							color="text.secondary"
+							title={row.original.payoutAddress || row.original.invoiceUrl}
+						>
+							{row.original.type === 'WITHDRAW'
+								? shortAddress(row.original.payoutAddress)
+								: row.original.invoiceUrl
+									? 'Crypto invoice'
+									: '—'}
+						</Typography>
+						{row.original.autoProcessed ? (
+							<Chip
+								size="small"
+								label="auto"
+								variant="outlined"
+								sx={{ mt: 0.5 }}
+							/>
+						) : null}
+					</div>
+				)
+			},
+			{
 				accessorKey: 'status',
 				header: 'Status',
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
 						label={row.original.status.toLowerCase()}
-						color={
-							row.original.status === 'APPROVED'
-								? 'success'
-								: row.original.status === 'REJECTED'
-									? 'error'
-									: 'warning'
-						}
+						color={requestStatusColor(row.original.status)}
 						variant="outlined"
 					/>
 				)
@@ -97,7 +132,12 @@ function WalletRequestsView() {
 								onClick={() =>
 									void update
 										.mutateAsync({ id: row.original.id, status: 'APPROVED' })
-										.then(() => enqueueSnackbar('Request approved', { variant: 'success' }))
+										.then((row) =>
+											enqueueSnackbar(
+												row.status === 'PROCESSING' ? 'Payout submitted' : 'Request approved',
+												{ variant: 'success' }
+											)
+										)
 										.catch((error: unknown) =>
 											enqueueSnackbar(
 												error instanceof Error ? error.message : 'Could not approve',
@@ -143,7 +183,7 @@ function WalletRequestsView() {
 			header={
 				<AdminPageHeader
 					title="Wallet requests"
-					subtitle="Approve or reject player deposits and withdrawals. Balance only changes after approval."
+					subtitle="Deposits credit after on-chain payment. Withdrawals within auto limits are sent immediately; the rest wait here. Do not reject a payout that is already sending."
 				/>
 			}
 			content={

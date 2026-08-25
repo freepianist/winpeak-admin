@@ -123,6 +123,12 @@ export function serializeWalletRequest(row: {
 	reviewNote: string | null;
 	reviewedBy: string | null;
 	reviewedAt: Date | null;
+	payCurrency?: string | null;
+	payoutAddress?: string | null;
+	invoiceUrl?: string | null;
+	providerRef?: string | null;
+	providerStatus?: string | null;
+	autoProcessed?: boolean;
 	createdAt: Date;
 	updatedAt: Date;
 	user?: {
@@ -145,6 +151,12 @@ export function serializeWalletRequest(row: {
 		reviewNote: row.reviewNote || '',
 		reviewedBy: row.reviewedBy || '',
 		reviewedAt: row.reviewedAt?.toISOString() || null,
+		payCurrency: row.payCurrency || '',
+		payoutAddress: row.payoutAddress || '',
+		invoiceUrl: row.invoiceUrl || '',
+		providerRef: row.providerRef || '',
+		providerStatus: row.providerStatus || '',
+		autoProcessed: Boolean(row.autoProcessed),
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString()
 	};

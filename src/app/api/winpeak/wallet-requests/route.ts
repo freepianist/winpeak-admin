@@ -15,8 +15,8 @@ export async function GET(request: Request) {
 
 	const rows = await prisma.walletRequest.findMany({
 		where: {
-			...(status === 'PENDING' || status === 'APPROVED' || status === 'REJECTED'
-				? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' }
+			...(status === 'PENDING' || status === 'PROCESSING' || status === 'APPROVED' || status === 'REJECTED'
+				? { status: status as 'PENDING' | 'PROCESSING' | 'APPROVED' | 'REJECTED' }
 				: {}),
 			...(userId ? { userId } : {})
 		},

@@ -24,7 +24,7 @@ export type Player = {
 export type LedgerKind = 'BET' | 'WIN' | 'CANCEL' | 'DEPOSIT' | 'WITHDRAW';
 
 export type WalletRequestType = 'DEPOSIT' | 'WITHDRAW';
-export type WalletRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type WalletRequestStatus = 'PENDING' | 'PROCESSING' | 'APPROVED' | 'REJECTED';
 
 export type WalletRequest = {
 	id: string;
@@ -39,6 +39,12 @@ export type WalletRequest = {
 	reviewNote: string;
 	reviewedBy: string;
 	reviewedAt: string | null;
+	payCurrency: string;
+	payoutAddress: string;
+	invoiceUrl: string;
+	providerRef: string;
+	providerStatus: string;
+	autoProcessed: boolean;
 	createdAt: string;
 	updatedAt: string;
 };

@@ -2,6 +2,7 @@ import type { Prisma } from '@/generated/prisma';
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
+import { createPayout, isPayoutConfigured } from '@/lib/payments/nowpayments';
 
 export function availableBalance(wallet: {
 	balance: { toString(): string } | number;
@@ -96,24 +97,83 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 }
 
 export async function approveWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
-	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-		const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
+	const request = await prisma.walletRequest.findUnique({ where: { id: requestId } });
 
-		if (!request) {
-			throw new Error('Request not found');
+	if (!request) {
+		throw new Error('Request not found');
+	}
+
+	if (request.status === 'PROCESSING') {
+		throw new Error('This payout is already being sent');
+	}
+
+	if (request.status !== 'PENDING') {
+		throw new Error('Request is no longer pending');
+	}
+
+	const amount = money(request.amount);
+
+	if (request.type === 'WITHDRAW') {
+		if (!request.payoutAddress) {
+			throw new Error('This withdrawal has no crypto address. Reject it or ask the player to resubmit.');
 		}
 
-		if (request.status !== 'PENDING') {
+		if (!isPayoutConfigured()) {
+			throw new Error(
+				'NOWPayments payouts are not configured in admin. Add API key, email, and password before approving withdrawals.'
+			);
+		}
+
+		await prisma.walletRequest.update({
+			where: { id: requestId },
+			data: {
+				status: 'PROCESSING',
+				reviewedBy,
+				reviewedAt: new Date(),
+				reviewNote: reviewNote?.trim() || 'Manual crypto payout submitted',
+				providerStatus: 'submitting'
+			}
+		});
+
+		try {
+			const payout = await createPayout({
+				amountUsd: amount,
+				address: request.payoutAddress,
+				currency: request.payCurrency || process.env.NOWPAYMENTS_PAYOUT_CURRENCY || 'usdttrc20',
+				requestId: request.id
+			});
+
+			return prisma.walletRequest.update({
+				where: { id: requestId },
+				data: {
+					providerRef: payout.id,
+					providerStatus: payout.status
+				},
+				include: {
+					user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
+				}
+			});
+		} catch (error) {
+			await prisma.walletRequest.update({
+				where: { id: requestId },
+				data: {
+					status: 'PENDING',
+					providerStatus: 'failed',
+					reviewNote: error instanceof Error ? error.message : 'Payout failed'
+				}
+			});
+			throw error;
+		}
+	}
+
+	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+		const latest = await tx.walletRequest.findUnique({ where: { id: requestId } });
+
+		if (!latest || latest.status !== 'PENDING') {
 			throw new Error('Request is no longer pending');
 		}
 
-		const amount = money(request.amount);
-
-		if (request.type === 'DEPOSIT') {
-			await applyDeposit(request.userId, amount, tx);
-		} else {
-			await applyWithdraw(request.userId, amount, tx);
-		}
+		await applyDeposit(latest.userId, money(latest.amount), tx);
 
 		return tx.walletRequest.update({
 			where: { id: requestId },
@@ -146,6 +206,10 @@ export async function rejectWalletRequest(requestId: string, reviewedBy: string,
 
 		if (!request) {
 			throw new Error('Request not found');
+		}
+
+		if (request.status === 'PROCESSING') {
+			throw new Error('This payout is already being sent');
 		}
 
 		if (request.status !== 'PENDING') {
