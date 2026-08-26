@@ -2,7 +2,10 @@ import type { Prisma } from '@/generated/prisma';
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
+import { grantDepositPromos } from '@/lib/promos';
 import { createPayout, isPayoutConfigured } from '@/lib/payments/nowpayments';
+
+const TX = { maxWait: 15_000, timeout: 30_000 } as const;
 
 export function availableBalance(wallet: {
 	balance: { toString(): string } | number;
@@ -36,15 +39,20 @@ export async function applyDeposit(userId: string, amount: number, tx?: Prisma.T
 				balanceAfter: next
 			}
 		});
+		await grantDepositPromos(userId, amount, client);
 
-		return { balance: availableBalance({ balance: next, heldBalance: wallet.heldBalance }), currency: wallet.currency };
+		const updated = await client.wallet.findUnique({ where: { userId } });
+		return {
+			balance: updated ? money(updated.balance) - money(updated.heldBalance) : availableBalance({ balance: next, heldBalance: wallet.heldBalance }),
+			currency: wallet.currency
+		};
 	};
 
 	if (tx) {
 		return run(tx);
 	}
 
-	const result = await prisma.$transaction(run);
+	const result = await prisma.$transaction(run, TX);
 
 	try {
 		await accrueAffiliateCpa(userId, amount);
@@ -93,7 +101,7 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 		return run(tx);
 	}
 
-	return prisma.$transaction(run);
+	return prisma.$transaction(run, TX);
 }
 
 export async function approveWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
@@ -187,7 +195,7 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 				user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
 			}
 		});
-	});
+	}, TX);
 
 	if (approved.type === 'DEPOSIT') {
 		try {
@@ -242,5 +250,5 @@ export async function rejectWalletRequest(requestId: string, reviewedBy: string,
 				user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
 			}
 		});
-	});
+	}, TX);
 }

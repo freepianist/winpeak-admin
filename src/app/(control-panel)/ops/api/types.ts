@@ -15,13 +15,25 @@ export type Player = {
 	updatedAt: string;
 	balance: number;
 	heldBalance: number;
+	bonusBalance: number;
+	playableBalance: number;
 	currency: string;
 	ledgerCount: number;
 	reviewCount: number;
 	ledger?: LedgerItem[];
+	bonuses?: PlayerBonus[];
+	activeBonus?: PlayerBonus | null;
 };
 
-export type LedgerKind = 'BET' | 'WIN' | 'CANCEL' | 'DEPOSIT' | 'WITHDRAW';
+export type LedgerKind =
+	| 'BET'
+	| 'WIN'
+	| 'CANCEL'
+	| 'DEPOSIT'
+	| 'WITHDRAW'
+	| 'BONUS'
+	| 'CASHBACK'
+	| 'REFERRAL';
 
 export type WalletRequestType = 'DEPOSIT' | 'WITHDRAW';
 export type WalletRequestStatus = 'PENDING' | 'PROCESSING' | 'APPROVED' | 'REJECTED';
@@ -298,4 +310,62 @@ export type StaffMember = {
 	createdAt: string;
 	updatedAt: string;
 	temporaryPassword?: string;
+};
+
+export type PromoKind = 'WELCOME' | 'RELOAD' | 'CASHBACK' | 'REFERRAL';
+export type PromoStatus = 'ACTIVE' | 'PAUSED';
+export type PlayerBonusStatus = 'ACTIVE' | 'COMPLETED' | 'FORFEITED' | 'EXPIRED';
+
+export type PromoOffer = {
+	id: string;
+	slug: string;
+	kind: PromoKind;
+	name: string;
+	headline: string;
+	details: string;
+	matchPercent: number;
+	maxAmount: number;
+	minDeposit: number;
+	wagerMultiplier: number;
+	expireDays: number;
+	maxBet: number;
+	depositNumber: number | null;
+	rewardAmount: number;
+	status: PromoStatus;
+};
+
+export type PlayerBonus = {
+	id: string;
+	userId: string;
+	playerName: string;
+	playerEmail: string;
+	offerId: string;
+	offerName: string;
+	kind: string;
+	status: PlayerBonusStatus;
+	bonusAmount: number;
+	wagerRequired: number;
+	wagerRemaining: number;
+	depositAmount: number;
+	expiresAt: string | null;
+	grantedAt: string;
+	completedAt: string | null;
+	note: string;
+};
+
+export type CashbackRunResult = {
+	credited: number;
+	amount: number;
+	scanned: number;
+	periodStart: string;
+	periodEnd: string;
+};
+
+export type PromosPayload = {
+	offers: PromoOffer[];
+	bonuses: PlayerBonus[];
+	cashback: {
+		lastAmount: number;
+		lastCount: number;
+	};
 };

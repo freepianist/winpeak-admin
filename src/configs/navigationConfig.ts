@@ -62,6 +62,13 @@ const navigationConfig: FuseNavItemType[] = [
 				type: 'item',
 				icon: 'lucide:gamepad-2',
 				url: '/apps/games'
+			},
+			{
+				id: 'apps.promos',
+				title: 'Promotions',
+				type: 'item',
+				icon: 'lucide:gift',
+				url: '/apps/promos'
 			}
 		]
 	},

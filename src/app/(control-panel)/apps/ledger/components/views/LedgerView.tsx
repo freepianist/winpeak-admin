@@ -22,6 +22,9 @@ const Root = styled(FusePageCarded)(() => ({
 }));
 
 const kindColor: Record<string, 'default' | 'success' | 'error' | 'warning' | 'info'> = {
+	BONUS: 'success',
+	CASHBACK: 'info',
+	REFERRAL: 'success',
 	DEPOSIT: 'success',
 	WITHDRAW: 'warning',
 	WIN: 'info',

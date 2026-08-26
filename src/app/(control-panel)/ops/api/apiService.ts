@@ -17,7 +17,11 @@ import type {
 	StaffMember,
 	Subscriber,
 	SuccessStory,
-	WalletRequest
+	WalletRequest,
+	PromoOffer,
+	PromosPayload,
+	PlayerBonus,
+	CashbackRunResult
 } from './types';
 
 async function unwrap<T>(request: Promise<T>) {
@@ -113,5 +117,11 @@ export const winpeakApi = {
 	inviteStaff: (data: { name: string; email: string; password?: string }) =>
 		unwrap(api.post('winpeak/staff', { json: data }).json<StaffMember>()),
 	updateStaff: (id: string, data: { name?: string; status?: string; password?: string }) =>
-		unwrap(api.patch(`winpeak/staff/${id}`, { json: data }).json<StaffMember>())
+		unwrap(api.patch(`winpeak/staff/${id}`, { json: data }).json<StaffMember>()),
+	getPromos: () => unwrap(api.get('winpeak/promos').json<PromosPayload>()),
+	updatePromo: (data: Partial<PromoOffer> & { id: string }) =>
+		unwrap(api.patch('winpeak/promos', { json: data }).json<PromoOffer>()),
+	runCashback: () => unwrap(api.post('winpeak/promos/cashback').json<CashbackRunResult>()),
+	forfeitBonus: (id: string) =>
+		unwrap(api.post(`winpeak/promos/bonuses/${id}/forfeit`).json<PlayerBonus>())
 };

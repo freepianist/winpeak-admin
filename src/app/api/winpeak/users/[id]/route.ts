@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { badRequest, notFound, requireAdmin, unauthorized } from '@/lib/admin-auth';
 import { getPlayerOrThrow, serializeLedger, serializeUser } from '@/lib/serializers';
+import { serializePlayerBonus } from '@/lib/promos';
 import { normalizeEmail } from '@/lib/password';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -19,16 +20,30 @@ export async function GET(_request: Request, context: RouteContext) {
 		return notFound('Player not found');
 	}
 
-	const ledger = await prisma.ledgerEntry.findMany({
-		where: { userId: id },
-		orderBy: { createdAt: 'desc' },
-		take: 100,
-		include: { user: { select: { firstName: true, lastName: true, email: true } } }
-	});
+	const [ledger, bonuses] = await Promise.all([
+		prisma.ledgerEntry.findMany({
+			where: { userId: id },
+			orderBy: { createdAt: 'desc' },
+			take: 100,
+			include: { user: { select: { firstName: true, lastName: true, email: true } } }
+		}),
+		prisma.playerBonus.findMany({
+			where: { userId: id },
+			orderBy: { grantedAt: 'desc' },
+			include: {
+				offer: { select: { name: true, kind: true } },
+				user: { select: { firstName: true, lastName: true, email: true } }
+			}
+		})
+	]);
 
 	return Response.json({
 		...serializeUser(user),
-		ledger: ledger.map(serializeLedger)
+		ledger: ledger.map(serializeLedger),
+		bonuses: bonuses.map(serializePlayerBonus),
+		activeBonus: bonuses.find((row) => row.status === 'ACTIVE')
+			? serializePlayerBonus(bonuses.find((row) => row.status === 'ACTIVE')!)
+			: null
 	});
 }
 

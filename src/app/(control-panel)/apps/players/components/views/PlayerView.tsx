@@ -25,6 +25,7 @@ import {
 	useUpdateWalletRequest,
 	useWalletRequests
 } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
+import { useForfeitBonus } from '@/app/(control-panel)/ops/api/hooks/usePromos';
 import type { LedgerItem, WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
 import { playerAccountChip } from '@/lib/player-status';
@@ -48,6 +49,7 @@ function PlayerView() {
 	const { mutateAsync: updatePlayer, isPending: saving } = useUpdatePlayer(playerId);
 	const { mutateAsync: resetPassword, isPending: resetting } = useResetPassword(playerId);
 	const updateRequest = useUpdateWalletRequest();
+	const forfeitBonus = useForfeitBonus();
 	const [password, setPassword] = useState('');
 
 	const methods = useForm<FormType>({
@@ -260,6 +262,13 @@ function PlayerView() {
 							<Typography className="mt-1 text-3xl font-semibold">
 								{formatMoney(player.balance, player.currency)}
 							</Typography>
+							<Typography
+								className="mt-2 text-sm"
+								color="text.secondary"
+							>
+								Bonus {formatMoney(player.bonusBalance || 0, player.currency)} · playable{' '}
+								{formatMoney(player.playableBalance || player.balance, player.currency)}
+							</Typography>
 							{player.heldBalance > 0 ? (
 								<Typography
 									className="mt-2 text-sm"
@@ -402,6 +411,27 @@ function PlayerView() {
 							>
 								Wallet changes happen only by approving player deposit/withdraw requests.
 							</Typography>
+							{player.activeBonus ? (
+								<>
+									<Typography className="text-sm">
+										Active bonus: {player.activeBonus.offerName} ·{' '}
+										{formatMoney(player.activeBonus.wagerRemaining, player.currency)} wager
+										left
+									</Typography>
+									<Button
+										color="error"
+										variant="outlined"
+										disabled={forfeitBonus.isPending}
+										onClick={() =>
+											void forfeitBonus.mutateAsync(player.activeBonus!.id).then(() =>
+												enqueueSnackbar('Bonus forfeited', { variant: 'success' })
+											)
+										}
+									>
+										Forfeit bonus
+									</Button>
+								</>
+							) : null}
 							<Button
 								component={Link}
 								to="/apps/wallet-requests"

@@ -59,7 +59,10 @@ const connectionString = process.env.DATABASE_URL;
 const globalForPrisma = globalThis as unknown as {
 	sitePrisma?: PrismaClient;
 	pool?: Pool;
+	prismaGen?: number;
 };
+
+const PRISMA_CLIENT_GEN = 2;
 
 function createPrisma() {
 	if (!connectionString) {
@@ -86,12 +89,20 @@ function createPrisma() {
 
 	return new PrismaClient({
 		adapter: new PrismaPg(pool),
-		log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error']
+		log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+		transactionOptions: {
+			maxWait: 10_000,
+			timeout: 20_000
+		}
 	});
 }
 
-export const prisma = globalForPrisma.sitePrisma ?? createPrisma();
+export const prisma =
+	globalForPrisma.prismaGen === PRISMA_CLIENT_GEN && globalForPrisma.sitePrisma
+		? globalForPrisma.sitePrisma
+		: createPrisma();
 
 if (process.env.NODE_ENV !== 'production') {
 	globalForPrisma.sitePrisma = prisma;
+	globalForPrisma.prismaGen = PRISMA_CLIENT_GEN;
 }

@@ -11,7 +11,7 @@ const ALLOWED = [
 	/^\/auth(\/|$)/,
 	/^\/dashboards\/?$/,
 	/^\/dashboards\/(winpeak|marketing|partner)(\/|$)/,
-	/^\/apps\/(players|wallet-requests|ledger|games|blog|comments|reviews|stories|inbox|subscribers|partners|commissions|payouts|partner|managers)(\/|$)/,
+	/^\/apps\/(players|wallet-requests|ledger|games|blog|comments|reviews|stories|inbox|subscribers|partners|commissions|payouts|partner|managers|promos)(\/|$)/,
 	/^\/api\/winpeak(\/|$)/,
 	/^\/api\/mock\/auth(\/|$)/,
 	/^\/api\/mock\/users(\/|$)/

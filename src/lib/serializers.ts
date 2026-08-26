@@ -56,6 +56,7 @@ export function serializeUser(user: {
 	wallet?: {
 		balance: { toString(): string } | number;
 		heldBalance?: { toString(): string } | number | null;
+		bonusBalance?: { toString(): string } | number | null;
 		currency: string;
 	} | null;
 	_count?: { ledger: number; reviews: number };
@@ -76,6 +77,10 @@ export function serializeUser(user: {
 		updatedAt: user.updatedAt.toISOString(),
 		balance: user.wallet ? availableBalance(user.wallet) : 0,
 		heldBalance,
+		bonusBalance: money(user.wallet?.bonusBalance),
+		playableBalance: user.wallet
+			? availableBalance(user.wallet) + money(user.wallet?.bonusBalance)
+			: 0,
 		currency: user.wallet?.currency || 'USD',
 		ledgerCount: user._count?.ledger ?? 0,
 		reviewCount: user._count?.reviews ?? 0
