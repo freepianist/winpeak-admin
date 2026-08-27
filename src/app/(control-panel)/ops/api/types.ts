@@ -179,6 +179,7 @@ export type DashboardStats = {
 		ggr: number;
 		counts: { deposits: number; withdrawals: number; bets: number; wins: number };
 	};
+	queues?: { pendingDeposits: number; pendingWithdrawals: number };
 	content: {
 		posts: number;
 		comments: number;
