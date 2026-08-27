@@ -23,6 +23,7 @@ import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeade
 import { useForfeitBonus, usePromos, useRunCashback, useUpdatePromo } from '@/app/(control-panel)/ops/api/hooks/usePromos';
 import type { PlayerBonus, PromoOffer } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { statusLabel } from '@/lib/status-label';
 
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
@@ -48,7 +49,7 @@ function PromosView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={row.original.status === 'ACTIVE' ? 'success' : 'default'}
 						variant="outlined"
 					/>
@@ -120,7 +121,7 @@ function PromosView() {
 			{
 				accessorKey: 'status',
 				header: 'Status',
-				Cell: ({ cell }) => cell.getValue<string>().toLowerCase()
+				Cell: ({ cell }) => statusLabel(cell.getValue<string>())
 			},
 			{
 				accessorKey: 'grantedAt',

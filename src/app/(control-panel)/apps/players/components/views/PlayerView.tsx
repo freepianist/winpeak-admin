@@ -29,6 +29,7 @@ import { useForfeitBonus } from '@/app/(control-panel)/ops/api/hooks/usePromos';
 import type { LedgerItem, WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
 import { playerAccountChip } from '@/lib/player-status';
+import { statusLabel } from '@/lib/status-label';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
 
@@ -120,7 +121,7 @@ function PlayerView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={
 							row.original.status === 'APPROVED'
 								? 'success'
@@ -255,11 +256,13 @@ function PlayerView() {
 				/>
 			}
 			content={
-				<div className="flex flex-col gap-6 p-4 sm:p-6">
-					<div className="grid gap-4 md:grid-cols-3">
-						<Paper className="rounded-xl p-5 shadow-sm">
-							<Typography color="text.secondary">Available balance</Typography>
-							<Typography className="mt-1 text-3xl font-semibold">
+				<div className="flex min-w-0 w-full flex-col gap-6 p-4 sm:p-6">
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Available balance
+							</Typography>
+							<Typography className="mt-2 text-3xl font-bold tracking-tight">
 								{formatMoney(player.balance, player.currency)}
 							</Typography>
 							<Typography
@@ -284,9 +287,11 @@ function PlayerView() {
 								color={playerAccountChip(player).color}
 							/>
 						</Paper>
-						<Paper className="rounded-xl p-5 shadow-sm">
-							<Typography color="text.secondary">Scorpio player</Typography>
-							<Typography className="mt-1 text-2xl font-semibold">
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Scorpio player
+							</Typography>
+							<Typography className="mt-2 text-2xl font-bold tracking-tight">
 								{player.scorpioPlayerCode || 'Not linked'}
 							</Typography>
 							<Typography
@@ -296,9 +301,25 @@ function PlayerView() {
 								{player.ledgerCount} ledger entries
 							</Typography>
 						</Paper>
-						<Paper className="rounded-xl p-5 shadow-sm">
-							<Typography color="text.secondary">Joined</Typography>
-							<Typography className="mt-1 text-2xl font-semibold">
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Compliance
+							</Typography>
+							<Typography className="mt-2 text-2xl font-bold tracking-tight">
+								{player.country || 'No country'}
+							</Typography>
+							<Typography className="mt-2 text-sm" color="text.secondary">
+								{player.ageVerified && player.dateOfBirth
+									? `DOB ${format(new Date(player.dateOfBirth), 'MMM d, yyyy')}`
+									: 'Age not verified'}
+								{player.lastIp ? ` · IP ${player.lastIp}` : ''}
+							</Typography>
+						</Paper>
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Joined
+							</Typography>
+							<Typography className="mt-2 text-2xl font-bold tracking-tight">
 								{format(new Date(player.createdAt), 'MMM d, yyyy')}
 							</Typography>
 							<Typography
@@ -311,7 +332,7 @@ function PlayerView() {
 					</div>
 
 					<div className="grid gap-6 xl:grid-cols-2">
-						<Paper className="flex flex-col gap-4 rounded-xl p-6 shadow-sm">
+						<Paper className="flex flex-col gap-4 rounded-2xl p-6 shadow-sm">
 							<Typography className="text-lg font-semibold">Profile</Typography>
 							<div className="grid gap-4 sm:grid-cols-2">
 								<Controller
@@ -389,7 +410,7 @@ function PlayerView() {
 							/>
 						</Paper>
 
-						<Paper className="flex flex-col gap-4 rounded-xl p-6 shadow-sm">
+						<Paper className="flex flex-col gap-4 rounded-2xl p-6 shadow-sm">
 							<Typography className="text-lg font-semibold">Reset password</Typography>
 							<TextField
 								label="New password"
@@ -449,7 +470,7 @@ function PlayerView() {
 					>
 						<Typography className="mb-3 text-lg font-semibold">Wallet requests</Typography>
 						<Paper
-							className="overflow-hidden rounded-xl"
+							className="min-w-0 overflow-x-auto rounded-xl"
 							elevation={1}
 						>
 							<DataTable
@@ -467,7 +488,7 @@ function PlayerView() {
 					>
 						<Typography className="mb-3 text-lg font-semibold">Recent activity</Typography>
 						<Paper
-							className="overflow-hidden rounded-xl"
+							className="min-w-0 overflow-x-auto rounded-xl"
 							elevation={1}
 						>
 							<DataTable

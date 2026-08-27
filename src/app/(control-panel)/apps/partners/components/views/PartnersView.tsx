@@ -24,6 +24,7 @@ import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeade
 import { useInvitePartner, usePartners, useReviewPartner } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
 import type { AffiliateDealType, AffiliatePartner } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { statusLabel } from '@/lib/status-label';
 
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
@@ -96,7 +97,7 @@ function PartnersView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status === 'INVITED' ? 'pending approval' : row.original.status.toLowerCase()}
+						label={row.original.status === 'INVITED' ? 'Pending approval' : statusLabel(row.original.status)}
 						color={
 							row.original.status === 'ACTIVE'
 								? 'success'
@@ -208,7 +209,7 @@ function PartnersView() {
 			}
 			content={
 				<Paper
-					className="flex h-full w-full flex-auto flex-col overflow-hidden rounded-b-none"
+					className="flex min-w-0 w-full flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

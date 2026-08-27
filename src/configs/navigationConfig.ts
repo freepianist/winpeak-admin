@@ -69,6 +69,13 @@ const navigationConfig: FuseNavItemType[] = [
 				type: 'item',
 				icon: 'lucide:gift',
 				url: '/apps/promos'
+			},
+			{
+				id: 'apps.blocked-countries',
+				title: 'Blocked countries',
+				type: 'item',
+				icon: 'lucide:globe-lock',
+				url: '/apps/blocked-countries'
 			}
 		]
 	},

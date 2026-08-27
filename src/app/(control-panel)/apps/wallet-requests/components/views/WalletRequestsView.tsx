@@ -17,6 +17,7 @@ import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeade
 import { useUpdateWalletRequest, useWalletRequests } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
 import type { WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { statusLabel } from '@/lib/status-label';
 
 function requestStatusColor(status: WalletRequest['status']) {
 	if (status === 'APPROVED') return 'success';
@@ -104,7 +105,7 @@ function WalletRequestsView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={requestStatusColor(row.original.status)}
 						variant="outlined"
 					/>
@@ -188,7 +189,7 @@ function WalletRequestsView() {
 			}
 			content={
 				<Paper
-					className="flex h-full w-full flex-auto flex-col overflow-hidden rounded-b-none"
+					className="flex min-w-0 w-full flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

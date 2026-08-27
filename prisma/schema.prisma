@@ -143,6 +143,10 @@ model User {
   referrals             User[]                 @relation("PlayerReferrals")
   firstDepositAt        DateTime?
   emailVerifiedAt       DateTime?
+  dateOfBirth           DateTime?
+  ageVerifiedAt         DateTime?
+  country               String?
+  lastIp                String?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   wallet                Wallet?
@@ -161,6 +165,7 @@ model User {
   @@index([status])
   @@index([referredByAffiliateId])
   @@index([referredByUserId])
+  @@index([country])
 }
 
 model Wallet {
@@ -423,4 +428,11 @@ model ReferralReward {
   createdAt  DateTime @default(now())
 
   @@index([referrerId])
+}
+
+model BlockedCountry {
+  code      String   @id
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

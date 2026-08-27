@@ -15,21 +15,21 @@ function AdminPageHeader(props: AdminPageHeaderProps) {
 	const { title, subtitle, action } = props;
 
 	return (
-		<div className="flex flex-auto flex-col py-4">
-			<PageBreadcrumb className="mb-2" />
-			<div className="flex min-w-0 flex-auto flex-col gap-2 sm:flex-row sm:items-center">
-				<div className="flex flex-auto flex-col">
+		<div className="flex w-full flex-col py-3 md:py-4">
+			<PageBreadcrumb className="mb-4 opacity-80" />
+			<div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="flex min-w-0 flex-1 flex-col">
 					<motion.span
-						initial={{ x: -20 }}
-						animate={{ x: 0, transition: { delay: 0.15 } }}
+						initial={{ x: -16, opacity: 0 }}
+						animate={{ x: 0, opacity: 1, transition: { delay: 0.08 } }}
 					>
-						<Typography className="text-3xl leading-none font-extrabold tracking-tight md:text-4xl">
+						<Typography className="text-4xl leading-none font-extrabold tracking-tight md:text-5xl">
 							{title}
 						</Typography>
 					</motion.span>
 					{subtitle && (
 						<Typography
-							className="mt-1 font-medium"
+							className="mt-2 max-w-2xl text-sm leading-relaxed md:text-base"
 							color="text.secondary"
 						>
 							{subtitle}
@@ -38,9 +38,9 @@ function AdminPageHeader(props: AdminPageHeaderProps) {
 				</div>
 				{action && (
 					<motion.div
-						className="flex grow-0"
-						initial={{ opacity: 0, x: 20 }}
-						animate={{ opacity: 1, x: 0, transition: { delay: 0.15 } }}
+						className="flex shrink-0 sm:ml-4"
+						initial={{ opacity: 0, x: 12 }}
+						animate={{ opacity: 1, x: 0, transition: { delay: 0.12 } }}
 					>
 						{action}
 					</motion.div>

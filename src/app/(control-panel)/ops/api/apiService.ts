@@ -21,7 +21,8 @@ import type {
 	PromoOffer,
 	PromosPayload,
 	PlayerBonus,
-	CashbackRunResult
+	CashbackRunResult,
+	BlockedCountry
 } from './types';
 
 async function unwrap<T>(request: Promise<T>) {
@@ -123,5 +124,10 @@ export const winpeakApi = {
 		unwrap(api.patch('winpeak/promos', { json: data }).json<PromoOffer>()),
 	runCashback: () => unwrap(api.post('winpeak/promos/cashback').json<CashbackRunResult>()),
 	forfeitBonus: (id: string) =>
-		unwrap(api.post(`winpeak/promos/bonuses/${id}/forfeit`).json<PlayerBonus>())
+		unwrap(api.post(`winpeak/promos/bonuses/${id}/forfeit`).json<PlayerBonus>()),
+	getBlockedCountries: () => unwrap(api.get('winpeak/blocked-countries').json<BlockedCountry[]>()),
+	addBlockedCountry: (data: { code: string; note?: string }) =>
+		unwrap(api.post('winpeak/blocked-countries', { json: data }).json<BlockedCountry>()),
+	removeBlockedCountry: (code: string) =>
+		unwrap(api.delete(`winpeak/blocked-countries/${code}`).json<{ success: boolean; code: string }>())
 };

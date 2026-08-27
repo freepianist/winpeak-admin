@@ -11,6 +11,7 @@ import NavLinkAdapter from '@fuse/core/NavLinkAdapter';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
 import { useMarketingStats } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
 import { formatMoney } from '@/lib/money';
+import { statusLabel } from '@/lib/status-label';
 
 function Card({
 	label,
@@ -175,7 +176,7 @@ function MarketingDashboardView() {
 											</Typography>
 											<Chip
 												size="small"
-												label={row.status.toLowerCase()}
+												label={statusLabel(row.status)}
 												color={row.status === 'ACTIVE' ? 'success' : 'default'}
 												variant="outlined"
 											/>

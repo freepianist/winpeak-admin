@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography';
 import Link from '@fuse/core/Link';
 import FuseSvgIcon from '@fuse/core/FuseSvgIcon';
 import { format } from 'date-fns';
+import { statusLabel } from '@/lib/status-label';
 import { enqueueSnackbar } from 'notistack';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
 import { useCreatePayout, usePartners, usePayouts, useUpdatePayout } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
@@ -66,7 +67,7 @@ function PayoutsView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={row.original.status === 'SENT' ? 'success' : 'default'}
 						variant="outlined"
 					/>
@@ -123,7 +124,7 @@ function PayoutsView() {
 			}
 			content={
 				<Paper
-					className="flex h-full w-full flex-auto flex-col overflow-hidden rounded-b-none"
+					className="flex min-w-0 w-full flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

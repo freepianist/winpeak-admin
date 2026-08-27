@@ -17,6 +17,7 @@ import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeade
 import { useCommissions, useUpdateCommission } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
 import type { AffiliateCommission } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { statusLabel } from '@/lib/status-label';
 
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
@@ -68,7 +69,7 @@ function CommissionsView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={
 							row.original.status === 'PAID'
 								? 'success'
@@ -150,7 +151,7 @@ function CommissionsView() {
 			}
 			content={
 				<Paper
-					className="flex h-full w-full flex-auto flex-col overflow-hidden rounded-b-none"
+					className="flex min-w-0 w-full flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

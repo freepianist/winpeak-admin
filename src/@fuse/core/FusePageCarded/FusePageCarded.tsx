@@ -27,11 +27,13 @@ const Root = styled('div')<FusePageCardedProps>(({ theme, ...props }) => ({
 	display: 'flex',
 	flexDirection: 'column',
 	minWidth: 0,
-	minHeight: '100%',
+	minHeight: 0,
 	position: 'relative',
 	flex: '1 1 auto',
 	width: '100%',
-	height: 'auto',
+	height: '100%',
+	boxSizing: 'border-box',
+	overflow: 'hidden',
 	padding: '16px 24px 24px',
 	backgroundColor: theme.vars.palette.background.default,
 
@@ -46,19 +48,14 @@ const Root = styled('div')<FusePageCardedProps>(({ theme, ...props }) => ({
 		zIndex: 2,
 		maxWidth: '100%',
 		minWidth: 0,
-		height: '100%',
+		minHeight: 0,
+		overflow: 'hidden',
 		backgroundColor: theme.vars.palette.background.paper,
-		boxShadow: theme.vars.shadows[2],
-		borderRadius: '12px 12px 0 0',
-		margin: '12px 0 0 0',
-		...(props.scroll === 'content' && {
-			position: 'absolute',
-			top: 0,
-			bottom: 0,
-			right: 0,
-			left: 0,
-			overflow: 'hidden'
-		})
+		boxShadow: theme.vars.shadows[1],
+		border: `1px solid ${theme.vars.palette.divider}`,
+		borderBottom: 0,
+		borderRadius: '16px 16px 0 0',
+		margin: '8px 0 0 0'
 	},
 
 	'& .FusePageCarded-header': {
@@ -70,6 +67,8 @@ const Root = styled('div')<FusePageCardedProps>(({ theme, ...props }) => ({
 		display: 'flex',
 		flexDirection: 'column',
 		flex: '1 1 auto',
+		minWidth: 0,
+		minHeight: 0,
 		overflow: 'auto',
 		WebkitOverflowScrolling: 'touch',
 		zIndex: 9999
@@ -83,7 +82,12 @@ const Root = styled('div')<FusePageCardedProps>(({ theme, ...props }) => ({
 	},
 
 	'& .FusePageCarded-content': {
-		flex: '1 0 auto'
+		display: 'flex',
+		flexDirection: 'column',
+		flex: '1 1 auto',
+		minWidth: 0,
+		minHeight: 0,
+		width: '100%'
 	},
 
 	'& .FusePageCarded-sidebarWrapper': {
@@ -237,7 +241,7 @@ function FusePageCarded(props: FusePageCardedProps) {
 			>
 				{header && <FusePageCardedHeader header={header} />}
 
-				<div className="relative z-10 container flex h-full flex-auto flex-col overflow-hidden">
+				<div className="relative z-10 container flex min-h-0 min-w-0 flex-auto flex-col overflow-hidden">
 					<div className="FusePageCarded-wrapper">
 						<FusePageCardedSidebar
 							position="left"

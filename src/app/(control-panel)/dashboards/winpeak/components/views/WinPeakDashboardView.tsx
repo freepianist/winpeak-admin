@@ -42,26 +42,26 @@ function StatCard({
 	to?: string;
 }) {
 	const content = (
-		<Paper className="flex flex-auto flex-col gap-3 rounded-xl p-6 shadow-sm">
-			<div className="flex items-start justify-between">
-				<div>
+		<Paper className="hover:border-secondary/30 flex h-full flex-auto flex-col gap-4 rounded-2xl border border-transparent p-5 shadow-sm transition-all hover:shadow-md">
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0">
 					<Typography
-						className="text-sm font-medium"
+						className="text-xs font-semibold tracking-[0.08em] uppercase"
 						color="text.secondary"
 					>
 						{label}
 					</Typography>
-					<Typography className="mt-1 text-3xl font-semibold tracking-tight">{value}</Typography>
+					<Typography className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">{value}</Typography>
 					{hint && (
 						<Typography
-							className="mt-1 text-sm"
+							className="mt-1.5 text-sm leading-snug"
 							color="text.secondary"
 						>
 							{hint}
 						</Typography>
 					)}
 				</div>
-				<div className="bg-secondary/10 text-secondary-800 flex h-10 w-10 items-center justify-center rounded-lg">
+				<div className="bg-secondary/12 text-secondary flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
 					<FuseSvgIcon size={20}>{icon}</FuseSvgIcon>
 				</div>
 			</div>
@@ -145,12 +145,12 @@ function WinPeakDashboardView() {
 				/>
 			}
 			content={
-				<div className="w-full px-4 pt-4 pb-8 md:px-8">
+				<div className="min-w-0 w-full px-4 pt-4 pb-8 md:px-8">
 					<motion.div
 						variants={container}
 						initial="hidden"
 						animate="show"
-						className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+						className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
 					>
 						<motion.div variants={item}>
 							<StatCard
@@ -206,8 +206,8 @@ function WinPeakDashboardView() {
 							animate="show"
 							className="xl:col-span-2"
 						>
-							<Paper className="flex h-full flex-col rounded-xl p-6 shadow-sm">
-								<div className="mb-4 flex items-center justify-between">
+							<Paper className="flex h-full flex-col rounded-2xl p-6 shadow-sm">
+								<div className="mb-5 flex items-center justify-between gap-3">
 									<div>
 										<Typography className="text-lg font-semibold">Cashflow · 14 days</Typography>
 										<Typography
@@ -240,8 +240,8 @@ function WinPeakDashboardView() {
 							</Paper>
 						</motion.div>
 
-						<Paper className="flex flex-col gap-3 rounded-xl p-6 shadow-sm">
-							<Typography className="text-lg font-semibold">Site activity</Typography>
+						<Paper className="flex flex-col gap-1 rounded-2xl p-6 shadow-sm">
+							<Typography className="mb-3 text-lg font-semibold">Site activity</Typography>
 							{[
 								{ label: 'Blog posts', value: stats.content.posts, to: '/apps/blog' },
 								{ label: 'Comments', value: stats.content.comments, to: '/apps/comments' },
@@ -253,18 +253,20 @@ function WinPeakDashboardView() {
 								<NavLinkAdapter
 									key={row.label}
 									to={row.to}
-									className="hover:bg-grey-100 dark:hover:bg-grey-200 flex items-center justify-between rounded-lg px-2 py-2"
+									className="hover:bg-action-hover flex items-center justify-between rounded-xl px-3 py-2.5 transition-colors"
 								>
 									<Typography color="text.secondary">{row.label}</Typography>
-									<Typography className="font-semibold">{row.value}</Typography>
+									<Typography className="rounded-full bg-grey-100 px-2.5 py-0.5 text-sm font-semibold dark:bg-grey-800">
+										{row.value}
+									</Typography>
 								</NavLinkAdapter>
 							))}
 						</Paper>
 					</div>
 
 					<div className="mt-4 grid gap-4 xl:grid-cols-2">
-						<Paper className="rounded-xl p-6 shadow-sm">
-							<div className="mb-4 flex items-center justify-between">
+						<Paper className="rounded-2xl p-6 shadow-sm">
+							<div className="mb-5 flex items-center justify-between">
 								<Typography className="text-lg font-semibold">Newest players</Typography>
 								<Button
 									component={NavLinkAdapter}
@@ -274,22 +276,32 @@ function WinPeakDashboardView() {
 									View all
 								</Button>
 							</div>
-							<div className="flex flex-col gap-3">
+							<div className="flex flex-col gap-1">
 								{stats.recentUsers.map((player: Player) => (
 									<div
 										key={player.id}
-										className="flex items-center justify-between gap-3"
+										className="hover:bg-action-hover flex items-center justify-between gap-3 rounded-xl px-2 py-2.5"
 									>
-										<div>
-											<Typography className="font-medium">{player.displayName}</Typography>
-											<Typography
-												className="text-sm"
-												color="text.secondary"
-											>
-												{player.email}
-											</Typography>
+										<div className="flex min-w-0 items-center gap-3">
+											<div className="bg-secondary/12 text-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+												{player.displayName
+													.split(' ')
+													.map((part) => part[0])
+													.join('')
+													.slice(0, 2)
+													.toUpperCase()}
+											</div>
+											<div className="min-w-0">
+												<Typography className="truncate font-medium">{player.displayName}</Typography>
+												<Typography
+													className="truncate text-sm"
+													color="text.secondary"
+												>
+													{player.email}
+												</Typography>
+											</div>
 										</div>
-										<div className="text-right">
+										<div className="shrink-0 text-right">
 											<Typography className="font-semibold">
 												{formatMoney(player.balance, player.currency)}
 											</Typography>
@@ -308,8 +320,8 @@ function WinPeakDashboardView() {
 							</div>
 						</Paper>
 
-						<Paper className="rounded-xl p-6 shadow-sm">
-							<div className="mb-4 flex items-center justify-between">
+						<Paper className="rounded-2xl p-6 shadow-sm">
+							<div className="mb-5 flex items-center justify-between">
 								<Typography className="text-lg font-semibold">Latest ledger</Typography>
 								<Button
 									component={NavLinkAdapter}
@@ -319,11 +331,11 @@ function WinPeakDashboardView() {
 									View all
 								</Button>
 							</div>
-							<div className="flex flex-col gap-3">
+							<div className="flex flex-col gap-1">
 								{stats.recentLedger.map((entry: LedgerItem) => (
 									<div
 										key={entry.id}
-										className="flex items-center justify-between gap-3"
+										className="hover:bg-action-hover flex items-center justify-between gap-3 rounded-xl px-2 py-2.5"
 									>
 										<div>
 											<Typography className="font-medium">

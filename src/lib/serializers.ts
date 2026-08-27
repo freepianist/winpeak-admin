@@ -51,6 +51,10 @@ export function serializeUser(user: {
 	status: string;
 	notes: string | null;
 	emailVerifiedAt?: Date | null;
+	dateOfBirth?: Date | null;
+	ageVerifiedAt?: Date | null;
+	country?: string | null;
+	lastIp?: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	wallet?: {
@@ -72,6 +76,11 @@ export function serializeUser(user: {
 		status: user.status,
 		emailVerified: Boolean(user.emailVerifiedAt),
 		emailVerifiedAt: user.emailVerifiedAt?.toISOString() || null,
+		dateOfBirth: user.dateOfBirth?.toISOString() || null,
+		ageVerified: Boolean(user.ageVerifiedAt && user.dateOfBirth),
+		ageVerifiedAt: user.ageVerifiedAt?.toISOString() || null,
+		country: user.country || null,
+		lastIp: user.lastIp || null,
 		notes: user.notes || '',
 		createdAt: user.createdAt.toISOString(),
 		updatedAt: user.updatedAt.toISOString(),

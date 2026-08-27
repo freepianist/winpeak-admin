@@ -10,6 +10,11 @@ export type Player = {
 	status: PlayerStatus;
 	emailVerified: boolean;
 	emailVerifiedAt: string | null;
+	dateOfBirth: string | null;
+	ageVerified: boolean;
+	ageVerifiedAt: string | null;
+	country: string | null;
+	lastIp: string | null;
 	notes: string;
 	createdAt: string;
 	updatedAt: string;
@@ -368,4 +373,12 @@ export type PromosPayload = {
 		lastAmount: number;
 		lastCount: number;
 	};
+};
+
+export type BlockedCountry = {
+	code: string;
+	name: string;
+	note: string;
+	createdAt: string;
+	updatedAt: string;
 };

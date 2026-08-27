@@ -18,6 +18,7 @@ import useUser from '@auth/useUser';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
 import { useBookRevShare, usePartner, useUpdatePartner } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
 import type { AffiliateDealType, AffiliateStatus } from '@/app/(control-panel)/ops/api/types';
+import { statusLabel } from '@/lib/status-label';
 import { formatMoney } from '@/lib/money';
 
 function PartnerView() {
@@ -273,7 +274,7 @@ function PartnerView() {
 									</div>
 									<Chip
 										size="small"
-										label={player.qualified ? 'FTD' : 'signup'}
+										label={player.qualified ? 'FTD' : 'Signup'}
 										color={player.qualified ? 'success' : 'default'}
 										variant="outlined"
 									/>
@@ -303,7 +304,7 @@ function PartnerView() {
 								</div>
 								<Chip
 									size="small"
-									label={row.status.toLowerCase()}
+									label={statusLabel(row.status)}
 									variant="outlined"
 								/>
 							</div>
@@ -321,7 +322,7 @@ function PartnerView() {
 								<Typography className="font-medium">{formatMoney(row.amount)}</Typography>
 								<Chip
 									size="small"
-									label={row.status.toLowerCase()}
+									label={statusLabel(row.status)}
 									variant="outlined"
 								/>
 							</div>
