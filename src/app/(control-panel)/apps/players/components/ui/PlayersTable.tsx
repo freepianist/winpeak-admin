@@ -9,12 +9,19 @@ import Typography from '@mui/material/Typography';
 import Link from '@fuse/core/Link';
 import { format } from 'date-fns';
 import { usePlayers } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
+import { useBlockedCountries } from '@/app/(control-panel)/ops/api/hooks/useBlockedCountries';
 import type { Player } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
-import { playerAccountChip } from '@/lib/player-status';
+import { isPlayerCountryBlocked, playerAccountChip } from '@/lib/player-status';
+import { countryLabel } from '@/lib/countries';
 
 function PlayersTable() {
 	const { data: players = [], isLoading } = usePlayers();
+	const { data: blockedCountries = [] } = useBlockedCountries();
+	const blockedCodes = useMemo(
+		() => blockedCountries.map((row) => row.code),
+		[blockedCountries]
+	);
 
 	const columns = useMemo<MRT_ColumnDef<Player>[]>(
 		() => [
@@ -48,7 +55,7 @@ function PlayersTable() {
 				accessorKey: 'status',
 				header: 'Status',
 				Cell: ({ row }) => {
-					const chip = playerAccountChip(row.original);
+					const chip = playerAccountChip(row.original, blockedCodes);
 					return (
 						<Chip
 							size="small"
@@ -56,6 +63,28 @@ function PlayersTable() {
 							color={chip.color}
 							variant="outlined"
 						/>
+					);
+				}
+			},
+			{
+				accessorKey: 'country',
+				header: 'Country',
+				Cell: ({ row }) => {
+					const name = countryLabel(row.original.country) || '—';
+					if (!isPlayerCountryBlocked(row.original.country, blockedCodes)) {
+						return name;
+					}
+
+					return (
+						<div className="flex items-center gap-1.5">
+							<span>{name}</span>
+							<Chip
+								size="small"
+								label="Blocked"
+								color="error"
+								variant="outlined"
+							/>
+						</div>
 					);
 				}
 			},
@@ -74,7 +103,7 @@ function PlayersTable() {
 				Cell: ({ cell }) => format(new Date(cell.getValue<string>()), 'MMM d, yyyy')
 			}
 		],
-		[]
+		[blockedCodes]
 	);
 
 	if (isLoading) {

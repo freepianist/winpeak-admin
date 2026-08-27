@@ -21,6 +21,7 @@ import { format, isToday } from 'date-fns';
 import { useWinPeakStats } from '@/app/(control-panel)/ops/api/hooks/useWinPeakStats';
 import { formatMoney } from '@/lib/money';
 import { playerAccountChip } from '@/lib/player-status';
+import { useBlockedCountries } from '@/app/(control-panel)/ops/api/hooks/useBlockedCountries';
 import type { DashboardStats, LedgerItem, Player } from '@/app/(control-panel)/ops/api/types';
 
 const container = {
@@ -437,6 +438,8 @@ function ActivityWidget({
 }
 
 function PlayersWidget({ players }: { players: Player[] }) {
+	const { data: blockedCountries = [] } = useBlockedCountries();
+	const blockedCodes = blockedCountries.map((row) => row.code);
 	return (
 		<Paper className="flex h-full flex-col overflow-hidden rounded-xl shadow-sm">
 			<div className="flex items-center justify-between p-6">
@@ -460,7 +463,7 @@ function PlayersWidget({ players }: { players: Player[] }) {
 			</div>
 			<div className="flex flex-auto flex-col px-3 pb-4">
 				{players.map((player) => {
-					const chip = playerAccountChip(player);
+					const chip = playerAccountChip(player, blockedCodes);
 					return (
 						<div
 							key={player.id}

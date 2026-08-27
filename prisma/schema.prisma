@@ -99,6 +99,7 @@ model AuthToken {
   tokenHash String        @unique
   expiresAt DateTime
   usedAt    DateTime?
+  failedAttempts Int      @default(0)
   createdAt DateTime      @default(now())
 
   @@index([userId, type])
@@ -147,6 +148,7 @@ model User {
   ageVerifiedAt         DateTime?
   country               String?
   lastIp                String?
+  sessionVersion        Int                    @default(1)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   wallet                Wallet?

@@ -28,10 +28,12 @@ import {
 import { useForfeitBonus } from '@/app/(control-panel)/ops/api/hooks/usePromos';
 import type { LedgerItem, WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
-import { playerAccountChip } from '@/lib/player-status';
+import { isPlayerCountryBlocked, playerAccountChip } from '@/lib/player-status';
+import { countryLabel } from '@/lib/countries';
 import { statusLabel } from '@/lib/status-label';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
+import { useBlockedCountries } from '@/app/(control-panel)/ops/api/hooks/useBlockedCountries';
 
 const schema = z.object({
 	firstName: z.string().min(1, 'First name is required'),
@@ -46,6 +48,8 @@ type FormType = z.infer<typeof schema>;
 function PlayerView() {
 	const { playerId } = useParams() as { playerId: string };
 	const { data: player, isLoading, isError } = usePlayer(playerId);
+	const { data: blockedCountries = [] } = useBlockedCountries();
+	const blockedCodes = blockedCountries.map((row) => row.code);
 	const { data: walletRequests = [] } = useWalletRequests({ userId: playerId });
 	const { mutateAsync: updatePlayer, isPending: saving } = useUpdatePlayer(playerId);
 	const { mutateAsync: resetPassword, isPending: resetting } = useResetPassword(playerId);
@@ -283,8 +287,8 @@ function PlayerView() {
 							<Chip
 								className="mt-3"
 								size="small"
-								label={playerAccountChip(player).label}
-								color={playerAccountChip(player).color}
+								label={playerAccountChip(player, blockedCodes).label}
+								color={playerAccountChip(player, blockedCodes).color}
 							/>
 						</Paper>
 						<Paper className="rounded-2xl p-5 shadow-sm">
@@ -306,8 +310,17 @@ function PlayerView() {
 								Compliance
 							</Typography>
 							<Typography className="mt-2 text-2xl font-bold tracking-tight">
-								{player.country || 'No country'}
+								{countryLabel(player.country) || player.country || 'No country'}
 							</Typography>
+							{isPlayerCountryBlocked(player.country, blockedCodes) ? (
+								<Chip
+									className="mt-2"
+									size="small"
+									label="Blocked region"
+									color="error"
+									variant="outlined"
+								/>
+							) : null}
 							<Typography className="mt-2 text-sm" color="text.secondary">
 								{player.ageVerified && player.dateOfBirth
 									? `DOB ${format(new Date(player.dateOfBirth), 'MMM d, yyyy')}`

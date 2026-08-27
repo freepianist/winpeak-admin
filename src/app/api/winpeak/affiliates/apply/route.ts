@@ -1,8 +1,13 @@
 import { prisma } from '@/lib/db';
 import { badRequest } from '@/lib/admin-auth';
 import { hashAffiliatePassword, makeAffiliateCode } from '@/lib/affiliates';
+import { rateLimited, requestIp } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
+	if (rateLimited(`affiliate-apply:${requestIp(request)}`, 5, 60 * 60 * 1000)) {
+		return Response.json({ error: 'Too many applications. Try again later.' }, { status: 429 });
+	}
+
 	const body = (await request.json()) as {
 		name?: string;
 		email?: string;

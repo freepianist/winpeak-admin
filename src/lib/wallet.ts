@@ -7,6 +7,16 @@ import { createPayout, isPayoutConfigured } from '@/lib/payments/nowpayments';
 
 const TX = { maxWait: 15_000, timeout: 30_000 } as const;
 
+async function lockWallet(client: Prisma.TransactionClient, userId: string) {
+	await client.$queryRaw`SELECT 1 FROM "Wallet" WHERE "userId" = ${userId} FOR UPDATE`;
+	return client.wallet.findUnique({ where: { userId } });
+}
+
+async function lockWalletRequest(client: Prisma.TransactionClient, id: string) {
+	await client.$queryRaw`SELECT 1 FROM "WalletRequest" WHERE "id" = ${id} FOR UPDATE`;
+	return client.walletRequest.findUnique({ where: { id } });
+}
+
 export function availableBalance(wallet: {
 	balance: { toString(): string } | number;
 	heldBalance?: { toString(): string } | number | null;
@@ -20,7 +30,7 @@ export async function applyDeposit(userId: string, amount: number, tx?: Prisma.T
 	}
 
 	const run = async (client: Prisma.TransactionClient) => {
-		const wallet = await client.wallet.findUnique({ where: { userId } });
+		const wallet = await lockWallet(client, userId);
 
 		if (!wallet) {
 			throw new Error('Wallet not found');
@@ -69,7 +79,7 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 	}
 
 	const run = async (client: Prisma.TransactionClient) => {
-		const wallet = await client.wallet.findUnique({ where: { userId } });
+		const wallet = await lockWallet(client, userId);
 
 		if (!wallet) {
 			throw new Error('Wallet not found');
@@ -175,7 +185,7 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 	}
 
 	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-		const latest = await tx.walletRequest.findUnique({ where: { id: requestId } });
+		const latest = await lockWalletRequest(tx, requestId);
 
 		if (!latest || latest.status !== 'PENDING') {
 			throw new Error('Request is no longer pending');
@@ -210,7 +220,7 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 
 export async function rejectWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
 	return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-		const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
+		const request = await lockWalletRequest(tx, requestId);
 
 		if (!request) {
 			throw new Error('Request not found');
@@ -225,7 +235,7 @@ export async function rejectWalletRequest(requestId: string, reviewedBy: string,
 		}
 
 		if (request.type === 'WITHDRAW') {
-			const wallet = await tx.wallet.findUnique({ where: { userId: request.userId } });
+			const wallet = await lockWallet(tx, request.userId);
 
 			if (!wallet) {
 				throw new Error('Wallet not found');
