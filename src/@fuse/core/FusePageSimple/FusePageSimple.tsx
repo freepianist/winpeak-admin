@@ -33,11 +33,12 @@ const Root = styled('div')<FusePageSimpleProps>(({ theme, ...props }) => ({
 	display: 'flex',
 	flexDirection: 'column',
 	minWidth: 0,
-	minHeight: '100%',
+	minHeight: 0,
 	position: 'relative',
 	flex: '1 1 auto',
 	width: '100%',
-	height: 'auto',
+	height: '100%',
+	overflow: 'hidden',
 	backgroundColor: theme.vars.palette.background.default,
 
 	'&.FusePageSimple-scroll-content': {
@@ -50,7 +51,8 @@ const Root = styled('div')<FusePageSimpleProps>(({ theme, ...props }) => ({
 		flex: '1 1 auto',
 		zIndex: 2,
 		minWidth: 0,
-		height: '100%',
+		minHeight: 0,
+		overflow: 'hidden',
 		backgroundColor: theme.vars.palette.background.default,
 
 		...(props.scroll === 'content' && {
@@ -82,7 +84,9 @@ const Root = styled('div')<FusePageSimpleProps>(({ theme, ...props }) => ({
 		display: 'flex',
 		flexDirection: 'column',
 		width: '100%',
-		flex: '1',
+		flex: '1 1 auto',
+		minWidth: 0,
+		minHeight: 0,
 		overflow: 'hidden',
 		//    WebkitOverflowScrolling: 'touch',
 		zIndex: 9999
@@ -99,13 +103,18 @@ const Root = styled('div')<FusePageSimpleProps>(({ theme, ...props }) => ({
 		display: 'flex',
 		flexDirection: 'column',
 		flex: '1 1 auto',
-		alignItems: 'start',
+		alignItems: 'stretch',
+		minWidth: 0,
 		minHeight: 0,
-		overflowY: 'auto',
+		width: '100%',
+		overflow: 'auto',
 		'& > .container': {
 			display: 'flex',
 			flexDirection: 'column',
-			minHeight: '100%'
+			width: '100%',
+			maxWidth: '100%',
+			minWidth: 0,
+			minHeight: 0
 		}
 	},
 
@@ -242,7 +251,7 @@ function FusePageSimple(props: FusePageSimpleProps) {
 				leftSidebarProps={{ ...sidebarPropsDefaults, ...leftSidebarProps }}
 				rightSidebarProps={{ ...sidebarPropsDefaults, ...rightSidebarProps }}
 			>
-				<div className="z-10 flex h-full flex-auto flex-col">
+				<div className="z-10 flex h-full min-h-0 min-w-0 flex-auto flex-col overflow-hidden">
 					<div className="FusePageSimple-wrapper">
 						<FusePageSimpleSidebar
 							position="left"

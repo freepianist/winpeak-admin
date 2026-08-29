@@ -25,10 +25,15 @@ import {
 	useUpdateWalletRequest,
 	useWalletRequests
 } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
+import { useForfeitBonus } from '@/app/(control-panel)/ops/api/hooks/usePromos';
 import type { LedgerItem, WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { isPlayerCountryBlocked, playerAccountChip } from '@/lib/player-status';
+import { countryLabel } from '@/lib/countries';
+import { statusLabel } from '@/lib/status-label';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
+import { useBlockedCountries } from '@/app/(control-panel)/ops/api/hooks/useBlockedCountries';
 
 const schema = z.object({
 	firstName: z.string().min(1, 'First name is required'),
@@ -43,10 +48,13 @@ type FormType = z.infer<typeof schema>;
 function PlayerView() {
 	const { playerId } = useParams() as { playerId: string };
 	const { data: player, isLoading, isError } = usePlayer(playerId);
+	const { data: blockedCountries = [] } = useBlockedCountries();
+	const blockedCodes = blockedCountries.map((row) => row.code);
 	const { data: walletRequests = [] } = useWalletRequests({ userId: playerId });
 	const { mutateAsync: updatePlayer, isPending: saving } = useUpdatePlayer(playerId);
 	const { mutateAsync: resetPassword, isPending: resetting } = useResetPassword(playerId);
 	const updateRequest = useUpdateWalletRequest();
+	const forfeitBonus = useForfeitBonus();
 	const [password, setPassword] = useState('');
 
 	const methods = useForm<FormType>({
@@ -107,18 +115,25 @@ function PlayerView() {
 				Cell: ({ row }) => formatMoney(row.original.amount, player?.currency)
 			},
 			{
+				id: 'destination',
+				header: 'Destination',
+				Cell: ({ row }) => row.original.payCurrency || row.original.payoutAddress || '—'
+			},
+			{
 				accessorKey: 'status',
 				header: 'Status',
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={
 							row.original.status === 'APPROVED'
 								? 'success'
 								: row.original.status === 'REJECTED'
 									? 'error'
-									: 'warning'
+									: row.original.status === 'PROCESSING'
+										? 'info'
+										: 'warning'
 						}
 						variant="outlined"
 					/>
@@ -141,7 +156,12 @@ function PlayerView() {
 								onClick={() =>
 									void updateRequest
 										.mutateAsync({ id: row.original.id, status: 'APPROVED' })
-										.then(() => enqueueSnackbar('Request approved', { variant: 'success' }))
+										.then((row) =>
+											enqueueSnackbar(
+												row.status === 'PROCESSING' ? 'Payout submitted' : 'Request approved',
+												{ variant: 'success' }
+											)
+										)
 										.catch((error: unknown) =>
 											enqueueSnackbar(
 												error instanceof Error ? error.message : 'Could not approve',
@@ -240,12 +260,21 @@ function PlayerView() {
 				/>
 			}
 			content={
-				<div className="flex flex-col gap-6 p-4 sm:p-6">
-					<div className="grid gap-4 md:grid-cols-3">
-						<Paper className="rounded-xl p-5 shadow-sm">
-							<Typography color="text.secondary">Available balance</Typography>
-							<Typography className="mt-1 text-3xl font-semibold">
+				<div className="flex min-w-0 w-full flex-col gap-6 p-4 sm:p-6">
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Available balance
+							</Typography>
+							<Typography className="mt-2 text-3xl font-bold tracking-tight">
 								{formatMoney(player.balance, player.currency)}
+							</Typography>
+							<Typography
+								className="mt-2 text-sm"
+								color="text.secondary"
+							>
+								Bonus {formatMoney(player.bonusBalance || 0, player.currency)} · playable{' '}
+								{formatMoney(player.playableBalance || player.balance, player.currency)}
 							</Typography>
 							{player.heldBalance > 0 ? (
 								<Typography
@@ -258,13 +287,15 @@ function PlayerView() {
 							<Chip
 								className="mt-3"
 								size="small"
-								label={player.status.toLowerCase()}
-								color={player.status === 'ACTIVE' ? 'success' : 'error'}
+								label={playerAccountChip(player, blockedCodes).label}
+								color={playerAccountChip(player, blockedCodes).color}
 							/>
 						</Paper>
-						<Paper className="rounded-xl p-5 shadow-sm">
-							<Typography color="text.secondary">Scorpio player</Typography>
-							<Typography className="mt-1 text-2xl font-semibold">
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Scorpio player
+							</Typography>
+							<Typography className="mt-2 text-2xl font-bold tracking-tight">
 								{player.scorpioPlayerCode || 'Not linked'}
 							</Typography>
 							<Typography
@@ -274,9 +305,34 @@ function PlayerView() {
 								{player.ledgerCount} ledger entries
 							</Typography>
 						</Paper>
-						<Paper className="rounded-xl p-5 shadow-sm">
-							<Typography color="text.secondary">Joined</Typography>
-							<Typography className="mt-1 text-2xl font-semibold">
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Compliance
+							</Typography>
+							<Typography className="mt-2 text-2xl font-bold tracking-tight">
+								{countryLabel(player.country) || player.country || 'No country'}
+							</Typography>
+							{isPlayerCountryBlocked(player.country, blockedCodes) ? (
+								<Chip
+									className="mt-2"
+									size="small"
+									label="Blocked region"
+									color="error"
+									variant="outlined"
+								/>
+							) : null}
+							<Typography className="mt-2 text-sm" color="text.secondary">
+								{player.ageVerified && player.dateOfBirth
+									? `DOB ${format(new Date(player.dateOfBirth), 'MMM d, yyyy')}`
+									: 'Age not verified'}
+								{player.lastIp ? ` · IP ${player.lastIp}` : ''}
+							</Typography>
+						</Paper>
+						<Paper className="rounded-2xl p-5 shadow-sm">
+							<Typography className="text-xs font-semibold tracking-[0.08em] uppercase" color="text.secondary">
+								Joined
+							</Typography>
+							<Typography className="mt-2 text-2xl font-bold tracking-tight">
 								{format(new Date(player.createdAt), 'MMM d, yyyy')}
 							</Typography>
 							<Typography
@@ -289,7 +345,7 @@ function PlayerView() {
 					</div>
 
 					<div className="grid gap-6 xl:grid-cols-2">
-						<Paper className="flex flex-col gap-4 rounded-xl p-6 shadow-sm">
+						<Paper className="flex flex-col gap-4 rounded-2xl p-6 shadow-sm">
 							<Typography className="text-lg font-semibold">Profile</Typography>
 							<div className="grid gap-4 sm:grid-cols-2">
 								<Controller
@@ -339,7 +395,12 @@ function PlayerView() {
 									<TextField
 										{...field}
 										select
-										label="Status"
+										label="Account status"
+										helperText={
+											player.emailVerified
+												? 'Email is verified'
+												: 'Email is not verified yet'
+										}
 										fullWidth
 									>
 										<MenuItem value="ACTIVE">Active</MenuItem>
@@ -362,7 +423,7 @@ function PlayerView() {
 							/>
 						</Paper>
 
-						<Paper className="flex flex-col gap-4 rounded-xl p-6 shadow-sm">
+						<Paper className="flex flex-col gap-4 rounded-2xl p-6 shadow-sm">
 							<Typography className="text-lg font-semibold">Reset password</Typography>
 							<TextField
 								label="New password"
@@ -384,6 +445,27 @@ function PlayerView() {
 							>
 								Wallet changes happen only by approving player deposit/withdraw requests.
 							</Typography>
+							{player.activeBonus ? (
+								<>
+									<Typography className="text-sm">
+										Active bonus: {player.activeBonus.offerName} ·{' '}
+										{formatMoney(player.activeBonus.wagerRemaining, player.currency)} wager
+										left
+									</Typography>
+									<Button
+										color="error"
+										variant="outlined"
+										disabled={forfeitBonus.isPending}
+										onClick={() =>
+											void forfeitBonus.mutateAsync(player.activeBonus!.id).then(() =>
+												enqueueSnackbar('Bonus forfeited', { variant: 'success' })
+											)
+										}
+									>
+										Forfeit bonus
+									</Button>
+								</>
+							) : null}
 							<Button
 								component={Link}
 								to="/apps/wallet-requests"
@@ -401,7 +483,7 @@ function PlayerView() {
 					>
 						<Typography className="mb-3 text-lg font-semibold">Wallet requests</Typography>
 						<Paper
-							className="overflow-hidden rounded-xl"
+							className="min-w-0 overflow-x-auto rounded-xl"
 							elevation={1}
 						>
 							<DataTable
@@ -419,7 +501,7 @@ function PlayerView() {
 					>
 						<Typography className="mb-3 text-lg font-semibold">Recent activity</Typography>
 						<Paper
-							className="overflow-hidden rounded-xl"
+							className="min-w-0 overflow-x-auto rounded-xl"
 							elevation={1}
 						>
 							<DataTable

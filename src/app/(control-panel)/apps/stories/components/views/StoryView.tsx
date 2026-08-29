@@ -14,13 +14,14 @@ import useNavigate from '@fuse/hooks/useNavigate';
 import Link from '@fuse/core/Link';
 import { enqueueSnackbar } from 'notistack';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
+import ImageUploadField from '@/app/(control-panel)/ops/components/ImageUploadField';
 import { useCreateStory, useDeleteStory, useStory, useUpdateStory } from '@/app/(control-panel)/ops/api/hooks/useContent';
 
 const schema = z.object({
 	authorName: z.string().min(1, 'Author is required'),
 	role: z.string().min(1, 'Role is required'),
 	content: z.string().min(8, 'Quote is required'),
-	image: z.string().optional(),
+	image: z.string().min(1, 'Image is required'),
 	rating: z.number().min(1).max(5)
 });
 
@@ -169,33 +170,34 @@ function StoryView() {
 							/>
 						)}
 					/>
-					<div className="grid gap-4 sm:grid-cols-2">
-						<Controller
-							name="rating"
-							control={control}
-							render={({ field }) => (
-								<TextField
-									{...field}
-									label="Rating"
-									type="number"
-									inputProps={{ min: 1, max: 5 }}
-									onChange={(event) => field.onChange(Number(event.target.value))}
-									fullWidth
-								/>
-							)}
-						/>
-						<Controller
-							name="image"
-							control={control}
-							render={({ field }) => (
-								<TextField
-									{...field}
-									label="Avatar path"
-									fullWidth
-								/>
-							)}
-						/>
-					</div>
+					<Controller
+						name="rating"
+						control={control}
+						render={({ field }) => (
+							<TextField
+								{...field}
+								label="Rating"
+								type="number"
+								inputProps={{ min: 1, max: 5 }}
+								onChange={(event) => field.onChange(Number(event.target.value))}
+								fullWidth
+							/>
+						)}
+					/>
+					<Controller
+						name="image"
+						control={control}
+						render={({ field, fieldState }) => (
+							<ImageUploadField
+								label="Player photo"
+								value={field.value || ''}
+								folder="stories"
+								variant="avatar"
+								error={fieldState.error?.message}
+								onChange={field.onChange}
+							/>
+						)}
+					/>
 				</div>
 			}
 		/>

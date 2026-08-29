@@ -15,6 +15,28 @@ enum LedgerKind {
   CANCEL
   DEPOSIT
   WITHDRAW
+  BONUS
+  CASHBACK
+  REFERRAL
+}
+
+enum PromoKind {
+  WELCOME
+  RELOAD
+  CASHBACK
+  REFERRAL
+}
+
+enum PromoStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum PlayerBonusStatus {
+  ACTIVE
+  COMPLETED
+  FORFEITED
+  EXPIRED
 }
 
 enum WalletRequestType {
@@ -24,6 +46,7 @@ enum WalletRequestType {
 
 enum WalletRequestStatus {
   PENDING
+  PROCESSING
   APPROVED
   REJECTED
 }
@@ -76,6 +99,7 @@ model AuthToken {
   tokenHash String        @unique
   expiresAt DateTime
   usedAt    DateTime?
+  failedAttempts Int      @default(0)
   createdAt DateTime      @default(now())
 
   @@index([userId, type])
@@ -114,8 +138,17 @@ model User {
   notes                 String?
   referredByAffiliateId String?
   referredBy            AffiliatePartner?      @relation(fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  referralCode          String?                @unique
+  referredByUserId      String?
+  referredByUser        User?                  @relation("PlayerReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referrals             User[]                 @relation("PlayerReferrals")
   firstDepositAt        DateTime?
   emailVerifiedAt       DateTime?
+  dateOfBirth           DateTime?
+  ageVerifiedAt         DateTime?
+  country               String?
+  lastIp                String?
+  sessionVersion        Int                    @default(1)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   wallet                Wallet?
@@ -125,35 +158,48 @@ model User {
   reviewReplies         GameReviewReply[]
   commissions           AffiliateCommission[]
   authTokens            AuthToken[]
+  bonuses               PlayerBonus[]
+  cashbackPayouts       CashbackPayout[]
+  referralRewardsGiven  ReferralReward[]       @relation("ReferralRewardsGiven")
+  referralRewardReceived ReferralReward?       @relation("ReferralRewardReceived")
 
   @@index([createdAt])
   @@index([status])
   @@index([referredByAffiliateId])
+  @@index([referredByUserId])
+  @@index([country])
 }
 
 model Wallet {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance     Decimal  @default(0) @db.Decimal(18, 4)
-  heldBalance Decimal  @default(0) @db.Decimal(18, 4)
-  currency    String   @default("USD")
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance      Decimal  @default(0) @db.Decimal(18, 4)
+  heldBalance  Decimal  @default(0) @db.Decimal(18, 4)
+  bonusBalance Decimal  @default(0) @db.Decimal(18, 4)
+  currency     String   @default("USD")
+  updatedAt    DateTime @updatedAt
 }
 
 model WalletRequest {
-  id         String              @id @default(cuid())
-  userId     String
-  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type       WalletRequestType
-  amount     Decimal             @db.Decimal(18, 4)
-  status     WalletRequestStatus @default(PENDING)
-  note       String?
-  reviewNote String?
-  reviewedBy String?
-  reviewedAt DateTime?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           WalletRequestType
+  amount         Decimal             @db.Decimal(18, 4)
+  status         WalletRequestStatus @default(PENDING)
+  note           String?
+  reviewNote     String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  payCurrency    String?
+  payoutAddress  String?
+  invoiceUrl     String?
+  providerRef    String?             @unique
+  providerStatus String?
+  autoProcessed  Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -314,4 +360,81 @@ model AffiliatePayout {
   createdAt DateTime         @default(now())
 
   @@index([partnerId, createdAt(sort: Desc)])
+}
+
+model PromoOffer {
+  id              String        @id @default(cuid())
+  slug            String        @unique
+  kind            PromoKind
+  name            String
+  headline        String
+  details         String        @db.Text
+  matchPercent    Decimal       @default(0) @db.Decimal(8, 2)
+  maxAmount       Decimal       @default(0) @db.Decimal(18, 4)
+  minDeposit      Decimal       @default(20) @db.Decimal(18, 4)
+  wagerMultiplier Decimal       @default(0) @db.Decimal(8, 2)
+  expireDays      Int           @default(14)
+  maxBet          Decimal       @default(5) @db.Decimal(18, 4)
+  depositNumber   Int?
+  rewardAmount    Decimal       @default(0) @db.Decimal(18, 4)
+  status          PromoStatus   @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  bonuses         PlayerBonus[]
+
+  @@index([kind, status])
+}
+
+model PlayerBonus {
+  id             String            @id @default(cuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId        String
+  offer          PromoOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  status         PlayerBonusStatus @default(ACTIVE)
+  bonusAmount    Decimal           @db.Decimal(18, 4)
+  wagerRequired  Decimal           @db.Decimal(18, 4)
+  wagerRemaining Decimal           @db.Decimal(18, 4)
+  depositAmount  Decimal           @default(0) @db.Decimal(18, 4)
+  expiresAt      DateTime?
+  grantedAt      DateTime          @default(now())
+  completedAt    DateTime?
+  note           String?
+
+  @@index([userId, status])
+  @@index([offerId])
+}
+
+model CashbackPayout {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId     String?
+  periodStart DateTime
+  periodEnd   DateTime
+  netLoss     Decimal  @db.Decimal(18, 4)
+  amount      Decimal  @db.Decimal(18, 4)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, periodStart])
+  @@index([periodStart])
+}
+
+model ReferralReward {
+  id         String   @id @default(cuid())
+  referrerId String
+  referrer   User     @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId String   @unique
+  referred   User     @relation("ReferralRewardReceived", fields: [referredId], references: [id], onDelete: Cascade)
+  amount     Decimal  @db.Decimal(18, 4)
+  createdAt  DateTime @default(now())
+
+  @@index([referrerId])
+}
+
+model BlockedCountry {
+  code      String   @id
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

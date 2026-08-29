@@ -51,16 +51,16 @@ function Layout1(props: Layout1Props) {
 		<Root
 			id="fuse-layout"
 			config={config}
-			className="flex w-full flex-auto"
+			className="flex h-svh min-h-0 w-full flex-auto overflow-hidden"
 		>
 			{config.leftSidePanel.display && <LeftSideLayout1 />}
 
-			<div className="flex min-w-0 flex-auto">
+			<div className="flex min-h-0 min-w-0 flex-auto">
 				{config.navbar.display && config.navbar.position === 'left' && <NavbarWrapperLayout1 />}
 
 				<main
 					id="fuse-main"
-					className="relative z-10 flex min-h-svh min-w-0 flex-auto flex-col"
+					className="relative z-10 flex min-h-0 min-w-0 flex-auto flex-col"
 				>
 					{config.toolbar.display && (
 						<ToolbarLayout1 className={config.toolbar.style === 'fixed' ? 'sticky top-0' : ''} />
@@ -70,7 +70,9 @@ function Layout1(props: Layout1Props) {
 						<Configurator />
 					</div>
 
-					<div className="relative z-10 flex min-h-0 flex-auto flex-col">{children}</div>
+					<div className="relative z-10 flex min-h-0 min-w-0 flex-auto flex-col overflow-hidden">
+						{children}
+					</div>
 
 					{config.footer.display && (
 						<FooterLayout1 className={config.footer.style === 'fixed' ? 'sticky bottom-0' : ''} />

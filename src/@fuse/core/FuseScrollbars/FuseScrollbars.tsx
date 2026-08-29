@@ -84,7 +84,7 @@ function FuseScrollbars(props: FuseScrollbarsProps) {
 	}, []);
 
 	useEffect(() => {
-		if (customScrollbars && containerRef.current && !isMobile) {
+		if (enable && customScrollbars && containerRef.current && !isMobile) {
 			psRef.current = new PerfectScrollbar(containerRef.current, option);
 			hookUpEvents();
 		}
@@ -96,7 +96,7 @@ function FuseScrollbars(props: FuseScrollbarsProps) {
 				unHookUpEvents();
 			}
 		};
-	}, [customScrollbars, hookUpEvents, option, unHookUpEvents]);
+	}, [customScrollbars, enable, hookUpEvents, option, unHookUpEvents]);
 
 	const scrollToTop = useCallback(() => {
 		if (containerRef.current) {
@@ -132,10 +132,10 @@ function FuseScrollbars(props: FuseScrollbarsProps) {
 
 	const sx = useMemo(() => {
 		return {
-			minHeight: '100%',
 			...(customScrollbars &&
 				enable &&
 				!isMobile && {
+					minHeight: '100%',
 					position: 'relative',
 					overflow: 'hidden!important',
 					overscrollBehavior: 'contain'

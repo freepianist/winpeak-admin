@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
 import { useMyAffiliate } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
 import { formatMoney } from '@/lib/money';
+import { statusLabel } from '@/lib/status-label';
 
 function PartnerEarningsView() {
 	const { data, isLoading } = useMyAffiliate();
@@ -50,7 +51,7 @@ function PartnerEarningsView() {
 								</div>
 								<Chip
 									size="small"
-									label={row.status.toLowerCase()}
+									label={statusLabel(row.status)}
 									variant="outlined"
 								/>
 							</div>
@@ -76,7 +77,7 @@ function PartnerEarningsView() {
 								</div>
 								<Chip
 									size="small"
-									label={row.status.toLowerCase()}
+									label={statusLabel(row.status)}
 									color={row.status === 'SENT' ? 'success' : 'default'}
 									variant="outlined"
 								/>

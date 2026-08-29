@@ -1,4 +1,5 @@
 import { badRequest, requireAdmin, unauthorized } from '@/lib/admin-auth';
+import { isCloudinaryConfigured, uploadImageToCloudinary } from '@/lib/cloudinary';
 import { savePublicUpload } from '@/lib/public-site';
 
 export async function POST(request: Request) {
@@ -17,7 +18,9 @@ export async function POST(request: Request) {
 	}
 
 	try {
-		const url = await savePublicUpload(file, folder);
+		const url = isCloudinaryConfigured()
+			? await uploadImageToCloudinary(file, folder)
+			: await savePublicUpload(file, folder);
 		return Response.json({ url });
 	} catch (error) {
 		return badRequest(error instanceof Error ? error.message : 'Could not upload image');

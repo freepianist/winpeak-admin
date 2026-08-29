@@ -28,7 +28,10 @@ export async function POST(request: Request, context: RouteContext) {
 
 	await prisma.user.update({
 		where: { id },
-		data: { passwordHash: await hashPassword(password) }
+		data: {
+			passwordHash: await hashPassword(password),
+			sessionVersion: { increment: 1 }
+		}
 	});
 
 	return Response.json({ success: true });

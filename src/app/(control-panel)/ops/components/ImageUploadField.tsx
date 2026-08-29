@@ -10,7 +10,7 @@ import { winpeakApi } from '@/app/(control-panel)/ops/api/apiService';
 type ImageUploadFieldProps = {
 	label: string;
 	value: string;
-	folder: 'blog' | 'authors';
+	folder: 'blog' | 'authors' | 'stories';
 	variant?: 'cover' | 'avatar';
 	helperText?: string;
 	error?: string;
@@ -104,7 +104,7 @@ function ImageUploadField(props: ImageUploadFieldProps) {
 				variant="caption"
 				color={error ? 'error' : 'text.secondary'}
 			>
-				{error || helperText || 'JPG, PNG, WEBP, or GIF up to 5MB'}
+				{error || helperText || 'JPG, PNG, WEBP, or GIF up to 5MB. Stored on Cloudinary.'}
 			</Typography>
 		</div>
 	);

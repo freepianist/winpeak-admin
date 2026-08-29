@@ -8,21 +8,40 @@ export type Player = {
 	displayName: string;
 	scorpioPlayerCode: number | null;
 	status: PlayerStatus;
+	emailVerified: boolean;
+	emailVerifiedAt: string | null;
+	dateOfBirth: string | null;
+	ageVerified: boolean;
+	ageVerifiedAt: string | null;
+	country: string | null;
+	lastIp: string | null;
 	notes: string;
 	createdAt: string;
 	updatedAt: string;
 	balance: number;
 	heldBalance: number;
+	bonusBalance: number;
+	playableBalance: number;
 	currency: string;
 	ledgerCount: number;
 	reviewCount: number;
 	ledger?: LedgerItem[];
+	bonuses?: PlayerBonus[];
+	activeBonus?: PlayerBonus | null;
 };
 
-export type LedgerKind = 'BET' | 'WIN' | 'CANCEL' | 'DEPOSIT' | 'WITHDRAW';
+export type LedgerKind =
+	| 'BET'
+	| 'WIN'
+	| 'CANCEL'
+	| 'DEPOSIT'
+	| 'WITHDRAW'
+	| 'BONUS'
+	| 'CASHBACK'
+	| 'REFERRAL';
 
 export type WalletRequestType = 'DEPOSIT' | 'WITHDRAW';
-export type WalletRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type WalletRequestStatus = 'PENDING' | 'PROCESSING' | 'APPROVED' | 'REJECTED';
 
 export type WalletRequest = {
 	id: string;
@@ -37,6 +56,12 @@ export type WalletRequest = {
 	reviewNote: string;
 	reviewedBy: string;
 	reviewedAt: string | null;
+	payCurrency: string;
+	payoutAddress: string;
+	invoiceUrl: string;
+	providerRef: string;
+	providerStatus: string;
+	autoProcessed: boolean;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -154,6 +179,7 @@ export type DashboardStats = {
 		ggr: number;
 		counts: { deposits: number; withdrawals: number; bets: number; wins: number };
 	};
+	queues?: { pendingDeposits: number; pendingWithdrawals: number };
 	content: {
 		posts: number;
 		comments: number;
@@ -290,4 +316,70 @@ export type StaffMember = {
 	createdAt: string;
 	updatedAt: string;
 	temporaryPassword?: string;
+};
+
+export type PromoKind = 'WELCOME' | 'RELOAD' | 'CASHBACK' | 'REFERRAL';
+export type PromoStatus = 'ACTIVE' | 'PAUSED';
+export type PlayerBonusStatus = 'ACTIVE' | 'COMPLETED' | 'FORFEITED' | 'EXPIRED';
+
+export type PromoOffer = {
+	id: string;
+	slug: string;
+	kind: PromoKind;
+	name: string;
+	headline: string;
+	details: string;
+	matchPercent: number;
+	maxAmount: number;
+	minDeposit: number;
+	wagerMultiplier: number;
+	expireDays: number;
+	maxBet: number;
+	depositNumber: number | null;
+	rewardAmount: number;
+	status: PromoStatus;
+};
+
+export type PlayerBonus = {
+	id: string;
+	userId: string;
+	playerName: string;
+	playerEmail: string;
+	offerId: string;
+	offerName: string;
+	kind: string;
+	status: PlayerBonusStatus;
+	bonusAmount: number;
+	wagerRequired: number;
+	wagerRemaining: number;
+	depositAmount: number;
+	expiresAt: string | null;
+	grantedAt: string;
+	completedAt: string | null;
+	note: string;
+};
+
+export type CashbackRunResult = {
+	credited: number;
+	amount: number;
+	scanned: number;
+	periodStart: string;
+	periodEnd: string;
+};
+
+export type PromosPayload = {
+	offers: PromoOffer[];
+	bonuses: PlayerBonus[];
+	cashback: {
+		lastAmount: number;
+		lastCount: number;
+	};
+};
+
+export type BlockedCountry = {
+	code: string;
+	name: string;
+	note: string;
+	createdAt: string;
+	updatedAt: string;
 };

@@ -1,36 +1,26 @@
 import { User } from '@auth/user';
 import UserModel from '@auth/user/models/UserModel';
 import { PartialDeep } from 'type-fest';
-import api from '@/utils/api';
 
-/**
- * Get user by id
- */
-export async function authGetDbUser(userId: string): Promise<Response> {
-	return api.get(`mock/auth/user/${userId}`);
+function json(data: unknown, status = 200) {
+	return new Response(JSON.stringify(data), { status });
 }
 
 /**
- * Get user by email
+ * Mock user APIs were removed. Settings live on the Auth.js session.
  */
-export async function authGetDbUserByEmail(email: string): Promise<Response> {
-	return api.get(`mock/auth/user-by-email/${email}`, { throwHttpErrors: false });
+export async function authGetDbUser(_userId: string): Promise<Response> {
+	return json({ message: 'Not found' }, 404);
 }
 
-/**
- * Update user
- */
+export async function authGetDbUserByEmail(_email: string): Promise<Response> {
+	return json({ message: 'User not found' }, 404);
+}
+
 export function authUpdateDbUser(user: PartialDeep<User>) {
-	return api.put(`mock/auth/user/${user.id}`, {
-		body: JSON.stringify(UserModel(user))
-	});
+	return json(UserModel(user), 200);
 }
 
-/**
- * Create user
- */
-export async function authCreateDbUser(user: PartialDeep<User>) {
-	return api.post('mock/users', {
-		body: JSON.stringify(UserModel(user))
-	});
+export async function authCreateDbUser(_user: PartialDeep<User>) {
+	return json({ message: 'Not found' }, 404);
 }

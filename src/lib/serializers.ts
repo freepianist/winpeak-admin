@@ -50,11 +50,17 @@ export function serializeUser(user: {
 	scorpioPlayerCode: number | null;
 	status: string;
 	notes: string | null;
+	emailVerifiedAt?: Date | null;
+	dateOfBirth?: Date | null;
+	ageVerifiedAt?: Date | null;
+	country?: string | null;
+	lastIp?: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	wallet?: {
 		balance: { toString(): string } | number;
 		heldBalance?: { toString(): string } | number | null;
+		bonusBalance?: { toString(): string } | number | null;
 		currency: string;
 	} | null;
 	_count?: { ledger: number; reviews: number };
@@ -68,11 +74,22 @@ export function serializeUser(user: {
 		displayName: `${user.firstName} ${user.lastName}`.trim(),
 		scorpioPlayerCode: user.scorpioPlayerCode,
 		status: user.status,
+		emailVerified: Boolean(user.emailVerifiedAt),
+		emailVerifiedAt: user.emailVerifiedAt?.toISOString() || null,
+		dateOfBirth: user.dateOfBirth?.toISOString() || null,
+		ageVerified: Boolean(user.ageVerifiedAt && user.dateOfBirth),
+		ageVerifiedAt: user.ageVerifiedAt?.toISOString() || null,
+		country: user.country || null,
+		lastIp: user.lastIp || null,
 		notes: user.notes || '',
 		createdAt: user.createdAt.toISOString(),
 		updatedAt: user.updatedAt.toISOString(),
 		balance: user.wallet ? availableBalance(user.wallet) : 0,
 		heldBalance,
+		bonusBalance: money(user.wallet?.bonusBalance),
+		playableBalance: user.wallet
+			? availableBalance(user.wallet) + money(user.wallet?.bonusBalance)
+			: 0,
 		currency: user.wallet?.currency || 'USD',
 		ledgerCount: user._count?.ledger ?? 0,
 		reviewCount: user._count?.reviews ?? 0
@@ -120,6 +137,12 @@ export function serializeWalletRequest(row: {
 	reviewNote: string | null;
 	reviewedBy: string | null;
 	reviewedAt: Date | null;
+	payCurrency?: string | null;
+	payoutAddress?: string | null;
+	invoiceUrl?: string | null;
+	providerRef?: string | null;
+	providerStatus?: string | null;
+	autoProcessed?: boolean;
 	createdAt: Date;
 	updatedAt: Date;
 	user?: {
@@ -142,6 +165,12 @@ export function serializeWalletRequest(row: {
 		reviewNote: row.reviewNote || '',
 		reviewedBy: row.reviewedBy || '',
 		reviewedAt: row.reviewedAt?.toISOString() || null,
+		payCurrency: row.payCurrency || '',
+		payoutAddress: row.payoutAddress || '',
+		invoiceUrl: row.invoiceUrl || '',
+		providerRef: row.providerRef || '',
+		providerStatus: row.providerStatus || '',
+		autoProcessed: Boolean(row.autoProcessed),
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString()
 	};

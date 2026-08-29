@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
 import { useInviteStaff, useStaff, useUpdateStaff } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
 import type { StaffMember } from '@/app/(control-panel)/ops/api/types';
+import { statusLabel } from '@/lib/status-label';
 
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
@@ -61,7 +62,7 @@ function ManagersView() {
 				Cell: ({ row }) => (
 					<Chip
 						size="small"
-						label={row.original.status.toLowerCase()}
+						label={statusLabel(row.original.status)}
 						color={row.original.status === 'ACTIVE' ? 'success' : 'default'}
 						variant="outlined"
 					/>
@@ -134,7 +135,7 @@ function ManagersView() {
 			}
 			content={
 				<Paper
-					className="flex h-full w-full flex-auto flex-col overflow-hidden rounded-b-none"
+					className="flex min-w-0 w-full flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

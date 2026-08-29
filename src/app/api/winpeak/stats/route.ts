@@ -32,7 +32,8 @@ export async function GET() {
 		subscriberCount,
 		recentUsers,
 		recentLedger,
-		recentActivity
+		recentActivity,
+		pendingWalletRows
 	] = await Promise.all([
 		prisma.user.count(),
 		prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
@@ -65,7 +66,12 @@ export async function GET() {
 		prisma.ledgerEntry.findMany({
 			where: { createdAt: { gte: thirtyDaysAgo } },
 			select: { kind: true, amount: true, createdAt: true }
-		})
+		}),
+		prisma.walletRequest.groupBy({
+			by: ['type'],
+			where: { status: { in: ['PENDING', 'PROCESSING'] } },
+			_count: true
+		}).catch(() => [])
 	]);
 
 	let affiliatePartners = 0;
@@ -127,6 +133,11 @@ export async function GET() {
 		if (entry.kind === 'WIN') bucket.wins += amount;
 	}
 
+	const pendingDeposits =
+		pendingWalletRows.find((row) => row.type === 'DEPOSIT')?._count || 0;
+	const pendingWithdrawals =
+		pendingWalletRows.find((row) => row.type === 'WITHDRAW')?._count || 0;
+
 	return Response.json({
 		users: {
 			total: userCount,
@@ -150,6 +161,10 @@ export async function GET() {
 				bets: totals.BET?.count || 0,
 				wins: totals.WIN?.count || 0
 			}
+		},
+		queues: {
+			pendingDeposits,
+			pendingWithdrawals
 		},
 		content: {
 			posts: postCount,

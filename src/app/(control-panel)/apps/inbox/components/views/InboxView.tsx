@@ -32,7 +32,7 @@ function InboxView() {
 				Cell: ({ cell }) => (
 					<Chip
 						size="small"
-						label={cell.getValue<boolean>() ? 'read' : 'new'}
+						label={cell.getValue<boolean>() ? 'Read' : 'New'}
 						color={cell.getValue<boolean>() ? 'default' : 'secondary'}
 						variant="outlined"
 					/>
@@ -65,7 +65,7 @@ function InboxView() {
 			}
 			content={
 				<Paper
-					className="flex h-full w-full flex-auto flex-col overflow-hidden rounded-b-none"
+					className="flex min-w-0 w-full flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

@@ -10,5 +10,7 @@ declare module 'next-auth' {
 		role?: string;
 		partnerId?: string;
 		staffId?: string;
+		settings?: unknown;
+		shortcuts?: string[];
 	}
 }

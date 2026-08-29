@@ -7,9 +7,24 @@ import { UnstorageAdapter } from '@auth/unstorage-adapter';
 import type { NextAuthConfig } from 'next-auth';
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/db';
 import { readEnv } from '@/lib/env';
 import { verifyAffiliatePassword } from '@/lib/affiliates';
+import type { User } from '@auth/user';
+
+const STAFF_ROLES = new Set(['admin', 'affiliate_manager', 'affiliate']);
+
+function secretsEqual(left: string, right: string) {
+	const a = Buffer.from(left);
+	const b = Buffer.from(right);
+	const size = Math.max(a.length, b.length, 1);
+	const leftPad = Buffer.alloc(size);
+	const rightPad = Buffer.alloc(size);
+	a.copy(leftPad);
+	b.copy(rightPad);
+	return timingSafeEqual(leftPad, rightPad) && a.length === b.length;
+}
 
 function credentialValue(value: unknown) {
 	if (Array.isArray(value)) {
@@ -52,7 +67,7 @@ export const providers: Provider[] = [
 			const adminEmail = readEnv('ADMIN_EMAIL')?.trim().toLowerCase();
 			const adminPassword = readEnv('ADMIN_PASSWORD')?.trim();
 
-			if (adminEmail && adminPassword && email && password && email === adminEmail && password === adminPassword) {
+			if (adminEmail && adminPassword && email && password && email === adminEmail && secretsEqual(password, adminPassword)) {
 				return {
 					email: adminEmail,
 					name: 'WinPeak Admin',
@@ -69,7 +84,7 @@ export const providers: Provider[] = [
 				email &&
 				password &&
 				email === managerEmail &&
-				password === managerPassword
+				secretsEqual(password, managerPassword)
 			) {
 				return {
 					email: managerEmail,
@@ -148,23 +163,44 @@ const config = {
 	basePath: '/auth',
 	trustHost: true,
 	callbacks: {
-		authorized() {
-			/** Checkout information to how to use middleware for authorization
-			 * https://next-auth.js.org/configuration/nextjs#middleware
-			 */
-			return true;
+		authorized({ request, auth }) {
+			const path = request.nextUrl.pathname;
+			if (
+				path.startsWith('/sign-in') ||
+				path.startsWith('/sign-up') ||
+				path.startsWith('/sign-out') ||
+				path.startsWith('/auth') ||
+				path.startsWith('/api/winpeak/affiliates/apply')
+			) {
+				return true;
+			}
+			return Boolean(auth);
 		},
 		jwt({ token, trigger, account, user }) {
-			if (user) {
-				const signedIn = user as { role?: string; partnerId?: string; staffId?: string; name?: string | null };
-				token.role = signedIn.role || 'admin';
+			if (user && trigger !== 'update') {
+				const signedIn = user as {
+					role?: string;
+					partnerId?: string;
+					staffId?: string;
+					name?: string | null;
+				};
+				token.role = signedIn.role && STAFF_ROLES.has(signedIn.role) ? signedIn.role : '';
 				token.partnerId = signedIn.partnerId;
 				token.staffId = signedIn.staffId;
 				token.name = signedIn.name || token.name;
 			}
 
-			if (trigger === 'update') {
-				token.name = user.name;
+			if (trigger === 'update' && user) {
+				const patch = user as {
+					name?: string | null;
+					displayName?: string;
+					settings?: unknown;
+					shortcuts?: string[];
+				};
+				if (patch.name) token.name = patch.name;
+				if (patch.displayName) token.name = patch.displayName;
+				if (patch.settings) token.settings = patch.settings;
+				if (patch.shortcuts) token.shortcuts = patch.shortcuts;
 			}
 
 			if (account?.provider === 'keycloak') {
@@ -178,6 +214,9 @@ const config = {
 				session.accessToken = token.accessToken;
 			}
 
+			const settings = ((token.settings as User['settings']) || {}) as User['settings'];
+			const shortcuts = Array.isArray(token.shortcuts) ? (token.shortcuts as string[]) : [];
+
 			if (token.role === 'affiliate') {
 				session.db = {
 					id: String(token.partnerId || ''),
@@ -185,8 +224,8 @@ const config = {
 					displayName: String(token.name || 'Partner'),
 					email: session.user.email,
 					photoURL: '',
-					shortcuts: [],
-					settings: {},
+					shortcuts,
+					settings,
 					loginRedirectUrl: '/dashboards/partner'
 				};
 				return session;
@@ -199,29 +238,42 @@ const config = {
 					displayName: String(token.name || 'Affiliate manager'),
 					email: session.user.email,
 					photoURL: '',
-					shortcuts: ['dashboards.marketing', 'apps.partners'],
-					settings: {},
+					shortcuts: shortcuts.length ? shortcuts : ['dashboards.marketing', 'apps.partners'],
+					settings,
 					loginRedirectUrl: '/dashboards/marketing'
 				};
 				return session;
 			}
 
+			if (token.role === 'admin') {
+				session.db = {
+					id: String(token.email || token.sub || 'admin'),
+					role: ['admin'],
+					displayName: String(token.name || 'WinPeak Admin'),
+					email: session.user.email,
+					photoURL: '',
+					shortcuts: shortcuts.length
+						? shortcuts
+						: ['dashboards.winpeak', 'apps.players', 'apps.ledger'],
+					settings,
+					loginRedirectUrl: '/dashboards/winpeak'
+				};
+				return session;
+			}
+
 			session.db = {
-				id: String(token.email || token.sub || 'admin'),
-				role: ['admin'],
-				displayName: String(token.name || 'WinPeak Admin'),
-				email: session.user.email,
+				id: '',
+				role: [],
+				displayName: 'Guest',
+				email: session.user?.email,
 				photoURL: '',
-				shortcuts: ['dashboards.winpeak', 'apps.players', 'apps.ledger'],
+				shortcuts: [],
 				settings: {},
-				loginRedirectUrl: '/dashboards/winpeak'
+				loginRedirectUrl: '/sign-in'
 			};
 
 			return session;
 		}
-	},
-	experimental: {
-		enableWebAuthn: true
 	},
 	session: {
 		strategy: 'jwt',

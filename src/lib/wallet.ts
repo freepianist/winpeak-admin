@@ -2,6 +2,20 @@ import type { Prisma } from '@/generated/prisma';
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
+import { grantDepositPromos } from '@/lib/promos';
+import { createPayout, isPayoutConfigured } from '@/lib/payments/nowpayments';
+
+const TX = { maxWait: 15_000, timeout: 30_000 } as const;
+
+async function lockWallet(client: Prisma.TransactionClient, userId: string) {
+	await client.$queryRaw`SELECT 1 FROM "Wallet" WHERE "userId" = ${userId} FOR UPDATE`;
+	return client.wallet.findUnique({ where: { userId } });
+}
+
+async function lockWalletRequest(client: Prisma.TransactionClient, id: string) {
+	await client.$queryRaw`SELECT 1 FROM "WalletRequest" WHERE "id" = ${id} FOR UPDATE`;
+	return client.walletRequest.findUnique({ where: { id } });
+}
 
 export function availableBalance(wallet: {
 	balance: { toString(): string } | number;
@@ -16,7 +30,7 @@ export async function applyDeposit(userId: string, amount: number, tx?: Prisma.T
 	}
 
 	const run = async (client: Prisma.TransactionClient) => {
-		const wallet = await client.wallet.findUnique({ where: { userId } });
+		const wallet = await lockWallet(client, userId);
 
 		if (!wallet) {
 			throw new Error('Wallet not found');
@@ -35,15 +49,20 @@ export async function applyDeposit(userId: string, amount: number, tx?: Prisma.T
 				balanceAfter: next
 			}
 		});
+		await grantDepositPromos(userId, amount, client);
 
-		return { balance: availableBalance({ balance: next, heldBalance: wallet.heldBalance }), currency: wallet.currency };
+		const updated = await client.wallet.findUnique({ where: { userId } });
+		return {
+			balance: updated ? money(updated.balance) - money(updated.heldBalance) : availableBalance({ balance: next, heldBalance: wallet.heldBalance }),
+			currency: wallet.currency
+		};
 	};
 
 	if (tx) {
 		return run(tx);
 	}
 
-	const result = await prisma.$transaction(run);
+	const result = await prisma.$transaction(run, TX);
 
 	try {
 		await accrueAffiliateCpa(userId, amount);
@@ -60,7 +79,7 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 	}
 
 	const run = async (client: Prisma.TransactionClient) => {
-		const wallet = await client.wallet.findUnique({ where: { userId } });
+		const wallet = await lockWallet(client, userId);
 
 		if (!wallet) {
 			throw new Error('Wallet not found');
@@ -92,28 +111,87 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 		return run(tx);
 	}
 
-	return prisma.$transaction(run);
+	return prisma.$transaction(run, TX);
 }
 
 export async function approveWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
-	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-		const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
+	const request = await prisma.walletRequest.findUnique({ where: { id: requestId } });
 
-		if (!request) {
-			throw new Error('Request not found');
+	if (!request) {
+		throw new Error('Request not found');
+	}
+
+	if (request.status === 'PROCESSING') {
+		throw new Error('This payout is already being sent');
+	}
+
+	if (request.status !== 'PENDING') {
+		throw new Error('Request is no longer pending');
+	}
+
+	const amount = money(request.amount);
+
+	if (request.type === 'WITHDRAW') {
+		if (!request.payoutAddress) {
+			throw new Error('This withdrawal has no crypto address. Reject it or ask the player to resubmit.');
 		}
 
-		if (request.status !== 'PENDING') {
+		if (!isPayoutConfigured()) {
+			throw new Error(
+				'NOWPayments payouts are not configured in admin. Add API key, email, and password before approving withdrawals.'
+			);
+		}
+
+		await prisma.walletRequest.update({
+			where: { id: requestId },
+			data: {
+				status: 'PROCESSING',
+				reviewedBy,
+				reviewedAt: new Date(),
+				reviewNote: reviewNote?.trim() || 'Manual crypto payout submitted',
+				providerStatus: 'submitting'
+			}
+		});
+
+		try {
+			const payout = await createPayout({
+				amountUsd: amount,
+				address: request.payoutAddress,
+				currency: request.payCurrency || process.env.NOWPAYMENTS_PAYOUT_CURRENCY || 'usdttrc20',
+				requestId: request.id
+			});
+
+			return prisma.walletRequest.update({
+				where: { id: requestId },
+				data: {
+					providerRef: payout.id,
+					providerStatus: payout.status
+				},
+				include: {
+					user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
+				}
+			});
+		} catch (error) {
+			await prisma.walletRequest.update({
+				where: { id: requestId },
+				data: {
+					status: 'PENDING',
+					providerStatus: 'failed',
+					reviewNote: error instanceof Error ? error.message : 'Payout failed'
+				}
+			});
+			throw error;
+		}
+	}
+
+	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+		const latest = await lockWalletRequest(tx, requestId);
+
+		if (!latest || latest.status !== 'PENDING') {
 			throw new Error('Request is no longer pending');
 		}
 
-		const amount = money(request.amount);
-
-		if (request.type === 'DEPOSIT') {
-			await applyDeposit(request.userId, amount, tx);
-		} else {
-			await applyWithdraw(request.userId, amount, tx);
-		}
+		await applyDeposit(latest.userId, money(latest.amount), tx);
 
 		return tx.walletRequest.update({
 			where: { id: requestId },
@@ -127,7 +205,7 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 				user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
 			}
 		});
-	});
+	}, TX);
 
 	if (approved.type === 'DEPOSIT') {
 		try {
@@ -142,10 +220,14 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 
 export async function rejectWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
 	return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-		const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
+		const request = await lockWalletRequest(tx, requestId);
 
 		if (!request) {
 			throw new Error('Request not found');
+		}
+
+		if (request.status === 'PROCESSING') {
+			throw new Error('This payout is already being sent');
 		}
 
 		if (request.status !== 'PENDING') {
@@ -153,7 +235,7 @@ export async function rejectWalletRequest(requestId: string, reviewedBy: string,
 		}
 
 		if (request.type === 'WITHDRAW') {
-			const wallet = await tx.wallet.findUnique({ where: { userId: request.userId } });
+			const wallet = await lockWallet(tx, request.userId);
 
 			if (!wallet) {
 				throw new Error('Wallet not found');
@@ -178,5 +260,5 @@ export async function rejectWalletRequest(requestId: string, reviewedBy: string,
 				user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
 			}
 		});
-	});
+	}, TX);
 }

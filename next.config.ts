@@ -20,7 +20,7 @@ if (process.env.NEXT_PUBLIC_BASE_URL) {
 const nextConfig: NextConfig = {
 	reactStrictMode: false,
 	poweredByHeader: false,
-	serverExternalPackages: ['@prisma/client', 'prisma', 'pg', '@prisma/adapter-pg', 'bcryptjs'],
+	serverExternalPackages: ['@prisma/client', 'prisma', 'pg', '@prisma/adapter-pg', 'bcryptjs', 'cloudinary'],
 	typescript: {
 		// Dangerously allow production builds to successfully complete even if
 		// your project has type errors.
@@ -42,7 +42,20 @@ const nextConfig: NextConfig = {
 
 			return config;
 		}
-	})
+	}),
+	async headers() {
+		return [
+			{
+				source: '/:path*',
+				headers: [
+					{ key: 'X-Content-Type-Options', value: 'nosniff' },
+					{ key: 'X-Frame-Options', value: 'DENY' },
+					{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+					{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }
+				]
+			}
+		];
+	}
 };
 
 export default nextConfig;

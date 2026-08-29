@@ -55,17 +55,22 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 				enableRowActions: true,
 				enableRowSelection: true,
 				muiBottomToolbarProps: {
-					className: 'flex items-center min-h-16 h-16 px-4'
+					className: 'flex items-center min-h-14 h-14 px-4'
 				},
 				muiTablePaperProps: {
 					elevation: 0,
 					square: true,
-					className: 'flex flex-col flex-auto h-full'
+					className: 'flex w-full min-w-0 flex-col'
 				},
 				muiTableContainerProps: {
-					className: 'flex-auto'
+					sx: {
+						width: '100%',
+						maxWidth: '100%',
+						overflowX: 'auto',
+						overflowY: 'visible'
+					}
 				},
-				enableStickyHeader: true,
+				enableStickyHeader: false,
 				// enableStickyFooter: true,
 				paginationDisplayMode: 'pages',
 				positionToolbarAlertBanner: 'top',
@@ -114,6 +119,9 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 							opacity: 1,
 							boxShadow: 'none',
 							height: row.getIsPinned() ? pinnedHeight : undefined,
+							'& td': {
+								transition: 'background-color 120ms ease'
+							},
 							'&:hover td': {
 								backgroundColor: (theme: Theme) => theme.vars.palette.action.hover
 							}
@@ -122,13 +130,17 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 				},
 				muiTableHeadCellProps: ({ column }) => ({
 					sx: {
-						py: 2,
+						py: 1.5,
 						px: 2.5,
-						fontSize: '0.75rem',
+						fontSize: '0.6875rem',
 						fontWeight: 700,
-						letterSpacing: '0.04em',
+						letterSpacing: '0.08em',
 						textTransform: 'uppercase',
 						color: (theme: Theme) => theme.vars.palette.text.secondary,
+						backgroundColor: (theme: Theme) =>
+							column.getIsPinned()
+								? theme.vars.palette.background.paper
+								: theme.vars.palette.background.default,
 						borderBottomWidth: 1,
 						'& .Mui-TableHeadCell-Content-Labels': {
 							flex: 1,
@@ -145,18 +157,17 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 							color: (theme: Theme) => theme.vars.palette.text.disabled,
 							fontSize: 11
 						},
-						backgroundColor: (theme) =>
-							column.getIsPinned() ? theme.vars.palette.background.paper : 'inherit'
 					}
 				}),
 				muiTableBodyCellProps: {
 					sx: {
-						py: 2.25,
+						py: 1.75,
 						px: 2.5,
 						fontSize: '0.875rem',
-						lineHeight: 1.5,
+						lineHeight: 1.45,
 						verticalAlign: 'middle',
-						borderBottomWidth: 1
+						borderBottomWidth: 1,
+						borderBottomColor: (theme: Theme) => theme.vars.palette.divider
 					}
 				},
 				mrtTheme: (theme) => ({
