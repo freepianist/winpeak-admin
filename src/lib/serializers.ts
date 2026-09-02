@@ -143,6 +143,10 @@ export function serializeWalletRequest(row: {
 	providerRef?: string | null;
 	providerStatus?: string | null;
 	autoProcessed?: boolean;
+	conversionId?: string | null;
+	conversionStatus?: string | null;
+	settleCurrency?: string | null;
+	settleAmount?: { toString(): string } | number | null;
 	createdAt: Date;
 	updatedAt: Date;
 	user?: {
@@ -171,6 +175,10 @@ export function serializeWalletRequest(row: {
 		providerRef: row.providerRef || '',
 		providerStatus: row.providerStatus || '',
 		autoProcessed: Boolean(row.autoProcessed),
+		conversionId: row.conversionId || '',
+		conversionStatus: row.conversionStatus || '',
+		settleCurrency: row.settleCurrency || '',
+		settleAmount: row.settleAmount == null ? null : money(row.settleAmount),
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString()
 	};

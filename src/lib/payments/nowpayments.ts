@@ -2,7 +2,7 @@ import { createHmac } from 'crypto';
 
 const API_BASE = 'https://api.nowpayments.io/v1';
 
-type JsonMap = Record<string, unknown>;
+export type JsonMap = Record<string, unknown>;
 
 let cachedJwt: { token: string; exp: number } | null = null;
 
@@ -34,7 +34,7 @@ function apiError(payload: unknown, fallback: string) {
 	return fallback;
 }
 
-async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) {
+export async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) {
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
 		'x-api-key': nowpaymentsApiKey(),
@@ -50,7 +50,7 @@ async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) 
 	return payload as T;
 }
 
-async function getJwt() {
+export async function getJwt() {
 	const email = process.env.NOWPAYMENTS_EMAIL?.trim();
 	const password = process.env.NOWPAYMENTS_PASSWORD;
 	if (!email || !password) {
@@ -101,7 +101,7 @@ function decodeBase32(input: string) {
 	return Buffer.from(bytes);
 }
 
-async function estimateCryptoAmount(amountUsd: number, currency: string) {
+export async function estimateCryptoAmount(amountUsd: number, currency: string) {
 	const query = new URLSearchParams({
 		amount: String(amountUsd),
 		currency_from: 'usd',
@@ -127,6 +127,9 @@ export async function createPayout(input: {
 
 	const token = await getJwt();
 	const currency = input.currency.toLowerCase();
+	// Sent as the crypto `amount` only. Passing `fiat_amount` alongside it makes
+	// NOWPayments ignore `amount` entirely and re-derive the payout from fiat,
+	// which would no longer match the amount the treasury conversion produced.
 	const cryptoAmount = await estimateCryptoAmount(input.amountUsd, currency);
 	const ipn = getIpnCallbackUrl();
 	const created = await npFetch<{ id?: string | number; status?: string; withdrawals?: JsonMap[] }>(
@@ -140,10 +143,13 @@ export async function createPayout(input: {
 						address: input.address,
 						currency,
 						amount: cryptoAmount,
-						fiat_amount: Number(input.amountUsd.toFixed(2)),
-						fiat_currency: 'usd',
 						ipn_callback_url: ipn,
-						extra_id: input.requestId
+						// Never send extra_id here. NOWPayments matches whitelisted
+						// payout addresses on (currency, address, extra_id), so any
+						// value makes even a whitelisted address fail with
+						// "address is not whitelisted". It is a memo/tag field for
+						// chains like XRP, not a place for our own reference.
+						unique_external_id: input.requestId
 					}
 				]
 			})

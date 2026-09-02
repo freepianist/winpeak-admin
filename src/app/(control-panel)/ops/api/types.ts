@@ -62,8 +62,18 @@ export type WalletRequest = {
 	providerRef: string;
 	providerStatus: string;
 	autoProcessed: boolean;
+	conversionId: string;
+	conversionStatus: string;
+	settleCurrency: string;
+	settleAmount: number | null;
 	createdAt: string;
 	updatedAt: string;
+};
+
+/** A wallet request plus what reconciling it against NOWPayments found. */
+export type WalletRequestSync = WalletRequest & {
+	syncChanged: boolean;
+	syncMessage: string;
 };
 
 export type LedgerItem = {

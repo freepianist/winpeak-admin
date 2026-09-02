@@ -198,11 +198,18 @@ model WalletRequest {
   providerRef    String?             @unique
   providerStatus String?
   autoProcessed  Boolean             @default(false)
+  // Custody conversion funding a payout in a coin other than the settlement currency
+  conversionId     String?
+  conversionStatus String?
+  // What the casino actually received/spent in its settlement currency
+  settleCurrency String?
+  settleAmount   Decimal?            @db.Decimal(18, 8)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([conversionId])
 }
 
 model LedgerEntry {

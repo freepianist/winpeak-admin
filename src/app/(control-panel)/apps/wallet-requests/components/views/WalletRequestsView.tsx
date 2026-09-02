@@ -14,7 +14,11 @@ import Link from '@fuse/core/Link';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
-import { useUpdateWalletRequest, useWalletRequests } from '@/app/(control-panel)/ops/api/hooks/usePlayers';
+import {
+	useSyncWalletRequest,
+	useUpdateWalletRequest,
+	useWalletRequests
+} from '@/app/(control-panel)/ops/api/hooks/usePlayers';
 import type { WalletRequest } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
 import { statusLabel } from '@/lib/status-label';
@@ -32,6 +36,19 @@ function shortAddress(value: string) {
 	return `${value.slice(0, 8)}…${value.slice(-6)}`;
 }
 
+/** Explains a payout that is waiting on the treasury conversion behind it. */
+function conversionNote(request: WalletRequest) {
+	if (!request.conversionId) return '';
+
+	const target = request.payCurrency ? request.payCurrency.toUpperCase() : 'destination';
+	const spend =
+		request.settleAmount && request.settleCurrency
+			? `${request.settleAmount} ${request.settleCurrency.toUpperCase()}`
+			: '';
+	const status = request.conversionStatus ? request.conversionStatus.toLowerCase() : 'pending';
+	return `Converting${spend ? ` ${spend}` : ''} to ${target} (${status})`;
+}
+
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
 		maxWidth: '100%!important'
@@ -41,6 +58,7 @@ const Root = styled(FusePageCarded)(() => ({
 function WalletRequestsView() {
 	const { data: requests = [], isLoading } = useWalletRequests();
 	const update = useUpdateWalletRequest();
+	const sync = useSyncWalletRequest();
 
 	const columns = useMemo<MRT_ColumnDef<WalletRequest>[]>(
 		() => [
@@ -102,14 +120,28 @@ function WalletRequestsView() {
 			{
 				accessorKey: 'status',
 				header: 'Status',
-				Cell: ({ row }) => (
-					<Chip
-						size="small"
-						label={statusLabel(row.original.status)}
-						color={requestStatusColor(row.original.status)}
-						variant="outlined"
-					/>
-				)
+				Cell: ({ row }) => {
+					const converting = conversionNote(row.original);
+					return (
+						<div>
+							<Chip
+								size="small"
+								label={statusLabel(row.original.status)}
+								color={requestStatusColor(row.original.status)}
+								variant="outlined"
+							/>
+							{converting ? (
+								<Typography
+									className="mt-1 text-sm"
+									color="text.secondary"
+									title={row.original.conversionId}
+								>
+									{converting}
+								</Typography>
+							) : null}
+						</div>
+					);
+				}
 			},
 			{
 				accessorKey: 'createdAt',
@@ -124,55 +156,90 @@ function WalletRequestsView() {
 			{
 				id: 'actions',
 				header: 'Actions',
-				Cell: ({ row }) =>
-					row.original.status === 'PENDING' ? (
-						<div className="flex gap-1">
+				Cell: ({ row }) => {
+					if (row.original.status === 'PENDING') {
+						return (
+							<div className="flex gap-1">
+								<Button
+									size="small"
+									color="secondary"
+									onClick={() =>
+										void update
+											.mutateAsync({ id: row.original.id, status: 'APPROVED' })
+											.then((row) =>
+												enqueueSnackbar(
+													row.status === 'PROCESSING'
+														? 'Payout submitted'
+														: 'Request approved',
+													{ variant: 'success' }
+												)
+											)
+											.catch((error: unknown) =>
+												enqueueSnackbar(
+													error instanceof Error ? error.message : 'Could not approve',
+													{ variant: 'error' }
+												)
+											)
+									}
+								>
+									Approve
+								</Button>
+								<Button
+									size="small"
+									color="error"
+									onClick={() =>
+										void update
+											.mutateAsync({ id: row.original.id, status: 'REJECTED' })
+											.then(() => enqueueSnackbar('Request rejected', { variant: 'success' }))
+											.catch((error: unknown) =>
+												enqueueSnackbar(
+													error instanceof Error ? error.message : 'Could not reject',
+													{ variant: 'error' }
+												)
+											)
+									}
+								>
+									Reject
+								</Button>
+							</div>
+						);
+					}
+
+					// A submitted payout only reaches a final state from an IPN, so
+					// staff need a way to reconcile it when that never arrives.
+					if (row.original.status === 'PROCESSING' && row.original.type === 'WITHDRAW') {
+						return (
 							<Button
 								size="small"
-								color="secondary"
+								disabled={sync.isPending}
+								title="Ask NOWPayments what happened to this payout and settle it accordingly"
 								onClick={() =>
-									void update
-										.mutateAsync({ id: row.original.id, status: 'APPROVED' })
-										.then((row) =>
-											enqueueSnackbar(
-												row.status === 'PROCESSING' ? 'Payout submitted' : 'Request approved',
-												{ variant: 'success' }
-											)
+									void sync
+										.mutateAsync({ id: row.original.id })
+										.then((result) =>
+											enqueueSnackbar(result.syncMessage, {
+												variant: result.syncChanged ? 'success' : 'info',
+												autoHideDuration: 8000
+											})
 										)
 										.catch((error: unknown) =>
 											enqueueSnackbar(
-												error instanceof Error ? error.message : 'Could not approve',
+												error instanceof Error ? error.message : 'Could not sync',
 												{ variant: 'error' }
 											)
 										)
 								}
 							>
-								Approve
+								Sync
 							</Button>
-							<Button
-								size="small"
-								color="error"
-								onClick={() =>
-									void update
-										.mutateAsync({ id: row.original.id, status: 'REJECTED' })
-										.then(() => enqueueSnackbar('Request rejected', { variant: 'success' }))
-										.catch((error: unknown) =>
-											enqueueSnackbar(
-												error instanceof Error ? error.message : 'Could not reject',
-												{ variant: 'error' }
-											)
-										)
-								}
-							>
-								Reject
-							</Button>
-						</div>
-					) : (
-						<span>—</span>
-					)
+						);
+					}
+
+					return <span>—</span>;
+				}
 			}
 		],
-		[update]
+		[update, sync]
 	);
 
 	if (isLoading) {
@@ -184,7 +251,7 @@ function WalletRequestsView() {
 			header={
 				<AdminPageHeader
 					title="Wallet requests"
-					subtitle="Deposits credit after on-chain payment. Withdrawals within auto limits are sent immediately; the rest wait here. Do not reject a payout that is already sending."
+					subtitle="Deposits credit after on-chain payment. Withdrawals within auto limits are sent immediately; the rest wait here. If a payout is stuck on Processing, use Sync to reconcile it against NOWPayments."
 				/>
 			}
 			content={
