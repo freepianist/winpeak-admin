@@ -1,4 +1,5 @@
 import { createHmac } from 'crypto';
+import { ProxyAgent, fetch as proxiedFetch } from 'undici';
 
 const API_BASE = 'https://api.nowpayments.io/v1';
 
@@ -34,6 +35,25 @@ function apiError(payload: unknown, fallback: string) {
 	return fallback;
 }
 
+/**
+ * NOWPayments ties its IP whitelist to the API key, so every call has to leave
+ * from one address. Serverless hosts have no stable egress IP, so a static-IP
+ * proxy stands in for one when NOWPAYMENTS_PROXY_URL is set.
+ *
+ * undici's `fetch` is used directly rather than the global one: Next.js wraps
+ * `fetch` for caching and can rebuild the request, which would drop the
+ * dispatcher and quietly send the call from the wrong IP.
+ */
+let proxyAgent: ProxyAgent | null | undefined;
+
+function proxyDispatcher() {
+	if (proxyAgent === undefined) {
+		const url = process.env.NOWPAYMENTS_PROXY_URL?.trim();
+		proxyAgent = url ? new ProxyAgent(url) : null;
+	}
+	return proxyAgent;
+}
+
 export async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) {
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
@@ -42,7 +62,15 @@ export async function npFetch<T>(path: string, init: RequestInit = {}, token?: s
 	};
 	if (token) headers.Authorization = `Bearer ${token}`;
 
-	const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+	const dispatcher = proxyDispatcher();
+	const response = dispatcher
+		? await proxiedFetch(`${API_BASE}${path}`, {
+				method: init.method,
+				body: init.body as string | undefined,
+				headers,
+				dispatcher
+			})
+		: await fetch(`${API_BASE}${path}`, { ...init, headers });
 	const payload = (await response.json().catch(() => null)) as unknown;
 	if (!response.ok) {
 		throw new Error(apiError(payload, `NOWPayments request failed (${response.status})`));
