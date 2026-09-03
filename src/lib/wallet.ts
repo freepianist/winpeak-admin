@@ -263,31 +263,71 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 			throw new Error('Request is no longer pending');
 		}
 
-		await applyDeposit(latest.userId, money(latest.amount), tx);
+		// An underpaid invoice has already credited whatever arrived, so approving
+		// it tops the player up to the invoiced amount rather than paying twice.
+		const alreadyCredited = latest.creditedAmount == null ? 0 : money(latest.creditedAmount);
+		const owed = Number((money(latest.amount) - alreadyCredited).toFixed(2));
+		const toppedUp = owed >= 0.01;
 
-		return tx.walletRequest.update({
+		if (toppedUp) {
+			await applyDeposit(latest.userId, owed, tx);
+			// The top-up covers the shortfall on the payment that came up short,
+			// so it is credited against that payment. Booking it separately would
+			// leave the payment still looking owed, and a late callback would then
+			// pay the same shortfall a second time.
+			const shortfall = await tx.depositPayment.findFirst({
+				where: { requestId },
+				orderBy: { updatedAt: 'desc' }
+			});
+			if (shortfall) {
+				await tx.depositPayment.update({
+					where: { id: shortfall.id },
+					data: { creditedAmount: money(shortfall.creditedAmount) + owed }
+				});
+			} else {
+				await tx.depositPayment.create({
+					data: {
+						requestId,
+						paymentId: `legacy:${requestId}`,
+						creditedAmount: owed,
+						providerStatus: latest.providerStatus
+					}
+				});
+			}
+		}
+
+		const request = await tx.walletRequest.update({
 			where: { id: requestId },
 			data: {
 				status: 'APPROVED',
+				...(toppedUp
+					? { creditedAmount: money(latest.amount), paymentOutcome: 'EXACT' }
+					: {}),
 				reviewedBy,
 				reviewedAt: new Date(),
-				reviewNote: reviewNote?.trim() || null
+				reviewNote:
+					reviewNote?.trim() ||
+					(alreadyCredited > 0
+						? `Topped up $${owed.toFixed(2)} to the invoiced amount`
+						: null)
 			},
 			include: {
 				user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
 			}
 		});
+
+		return { request, credited: toppedUp ? owed : 0 };
 	}, TX);
 
-	if (approved.type === 'DEPOSIT') {
+	if (approved.request.type === 'DEPOSIT' && approved.credited > 0) {
 		try {
-			await accrueAffiliateCpa(approved.userId, money(approved.amount));
+			await accrueAffiliateCpa(approved.request.userId, approved.credited);
 		} catch (error) {
 			console.error('Affiliate CPA accrual failed', error);
 		}
 	}
 
-	return approved;
+	return approved.request;
 }
 
 const WITH_PLAYER = {

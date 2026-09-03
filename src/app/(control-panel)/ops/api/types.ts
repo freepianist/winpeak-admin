@@ -66,6 +66,11 @@ export type WalletRequest = {
 	conversionStatus: string;
 	settleCurrency: string;
 	settleAmount: number | null;
+	/** Coin units the player sent, and what they were worth once credited. */
+	paidAmount: number | null;
+	creditedAmount: number | null;
+	/** EXACT, UNDERPAID or OVERPAID against the invoiced amount. */
+	paymentOutcome: string;
 	createdAt: string;
 	updatedAt: string;
 };

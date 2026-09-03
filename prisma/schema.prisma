@@ -197,6 +197,16 @@ model WalletRequest {
   invoiceUrl     String?
   providerRef    String?             @unique
   providerStatus String?
+  // NOWPayments payment id, distinct from providerRef (the invoice id). Needed to
+  // send a player back to the payment they already started instead of a new one.
+  providerPaymentId String?
+  // Coin units the player actually sent, and what they were worth in USD once
+  // credited. Both are tracked because a deposit can be paid in instalments, so
+  // creditedAmount is the running total already in the wallet.
+  paidAmount     Decimal?            @db.Decimal(18, 8)
+  creditedAmount Decimal?            @db.Decimal(18, 4)
+  // EXACT, UNDERPAID or OVERPAID, compared against the invoiced amount
+  paymentOutcome String?
   autoProcessed  Boolean             @default(false)
   // Custody conversion funding a payout in a coin other than the settlement currency
   conversionId     String?
@@ -206,10 +216,33 @@ model WalletRequest {
   settleAmount   Decimal?            @db.Decimal(18, 8)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  payments       DepositPayment[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([conversionId])
+}
+
+/**
+ * One row per NOWPayments payment against a deposit invoice. An invoice can hold
+ * several payments, so crediting has to be tracked per payment: without this a
+ * player paying the same invoice twice looks identical to one callback arriving
+ * twice, and the second payment gets swallowed as a duplicate.
+ */
+model DepositPayment {
+  id             String        @id @default(cuid())
+  requestId      String
+  request        WalletRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  // NOWPayments payment id. Invoices settled before this table existed are
+  // backfilled under a "legacy:<requestId>" key so totals stay correct.
+  paymentId      String        @unique
+  paidAmount     Decimal?      @db.Decimal(18, 8)
+  creditedAmount Decimal       @default(0) @db.Decimal(18, 4)
+  providerStatus String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([requestId])
 }
 
 model LedgerEntry {

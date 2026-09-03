@@ -49,6 +49,17 @@ function conversionNote(request: WalletRequest) {
 	return `Converting${spend ? ` ${spend}` : ''} to ${target} (${status})`;
 }
 
+/** Flags a deposit that did not land on the invoiced amount. */
+function paymentOutcomeChip(request: WalletRequest) {
+	if (request.paymentOutcome === 'UNDERPAID') {
+		return { label: 'Underpaid', color: 'warning' as const };
+	}
+	if (request.paymentOutcome === 'OVERPAID') {
+		return { label: 'Overpaid', color: 'info' as const };
+	}
+	return null;
+}
+
 const Root = styled(FusePageCarded)(() => ({
 	'& .container': {
 		maxWidth: '100%!important'
@@ -87,7 +98,24 @@ function WalletRequestsView() {
 			{
 				accessorKey: 'amount',
 				header: 'Amount',
-				Cell: ({ row }) => formatMoney(row.original.amount, row.original.currency)
+				Cell: ({ row }) => {
+					const { amount, creditedAmount, currency } = row.original;
+					const differs =
+						creditedAmount !== null && Math.abs(creditedAmount - amount) >= 0.01;
+					return (
+						<div>
+							{formatMoney(amount, currency)}
+							{differs ? (
+								<Typography
+									className="text-sm"
+									color="text.secondary"
+								>
+									{formatMoney(creditedAmount, currency)} credited
+								</Typography>
+							) : null}
+						</div>
+					);
+				}
 			},
 			{
 				id: 'destination',
@@ -122,6 +150,7 @@ function WalletRequestsView() {
 				header: 'Status',
 				Cell: ({ row }) => {
 					const converting = conversionNote(row.original);
+					const outcome = paymentOutcomeChip(row.original);
 					return (
 						<div>
 							<Chip
@@ -130,6 +159,15 @@ function WalletRequestsView() {
 								color={requestStatusColor(row.original.status)}
 								variant="outlined"
 							/>
+							{outcome ? (
+								<Chip
+									className="ml-1"
+									size="small"
+									label={outcome.label}
+									color={outcome.color}
+									variant="outlined"
+								/>
+							) : null}
 							{converting ? (
 								<Typography
 									className="mt-1 text-sm"
