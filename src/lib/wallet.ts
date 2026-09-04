@@ -342,6 +342,14 @@ const WITH_PLAYER = {
 const CLAIM_TTL_MS = 5 * 60 * 1000;
 
 /**
+ * How long a finished conversion may sit without the player site's payment tick
+ * touching it before staff are handed control. That tick runs every minute and
+ * stamps the row each time it looks, so silence for this long means it is not
+ * running and nothing would ever send the payout.
+ */
+const TICK_STALL_MS = 30 * 60 * 1000;
+
+/**
  * Writes the terminal outcome of a payout we read back from NOWPayments.
  *
  * Re-checks the status under lock because the IPN can land while we are still
@@ -521,16 +529,50 @@ export async function syncWalletRequest(requestId: string, reviewedBy: string) {
 		}
 
 		if (isConversionSettled(conversion.status)) {
+			// The coins are already in the destination wallet, so the only thing
+			// left is submitting the payout. That is the tick's job, unless the tick
+			// is clearly not running.
+			if (Date.now() - request.updatedAt.getTime() > TICK_STALL_MS) {
+				const updated = await recordSyncProgress(requestId, {
+					status: 'PENDING',
+					autoProcessed: false,
+					providerStatus: 'needs_review',
+					conversionStatus: conversion.status,
+					reviewNote: 'Conversion finished but no payout was sent — approve to send it'
+				});
+				return {
+					request: updated,
+					changed: true,
+					message:
+						'Conversion finished, but nothing has processed it for half an hour — check that the payments cron is running. Returned to pending so you can approve it manually.'
+				};
+			}
+
+			// Already queued, so there is nothing to write. Saving anyway would push
+			// updatedAt forward, and that timestamp is the only signal that the tick
+			// is alive — pressing Sync twice would then hide a dead scheduler.
+			if (request.providerStatus === 'retry' && request.conversionStatus === conversion.status) {
+				return {
+					request,
+					changed: false,
+					message: 'Conversion finished and the payout is queued. It goes out on the next tick.'
+				};
+			}
+
+			// Left in PROCESSING and flagged for retry so the player site's payment
+			// tick sends the payout. Returning it to PENDING would drop it out of
+			// that queue, which is what used to leave a paid-for conversion sitting
+			// in the treasury with no payout behind it.
 			const updated = await recordSyncProgress(requestId, {
-				status: 'PENDING',
-				providerStatus: 'needs_review',
+				status: 'PROCESSING',
+				providerStatus: 'retry',
 				conversionStatus: conversion.status,
-				reviewNote: 'Conversion finished — approve to send the payout'
+				reviewNote: 'Conversion finished — the payout is sent automatically'
 			});
 			return {
 				request: updated,
 				changed: true,
-				message: 'Conversion finished. Press Approve to send the payout.'
+				message: 'Conversion finished. The payout goes out on the next tick, so no action is needed.'
 			};
 		}
 
