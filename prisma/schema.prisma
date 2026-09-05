@@ -134,6 +134,7 @@ model User {
   firstName             String
   lastName              String
   scorpioPlayerCode     Int?
+  oroplayUserCode       String?
   status                UserStatus             @default(ACTIVE)
   notes                 String?
   referredByAffiliateId String?
@@ -255,18 +256,23 @@ model LedgerEntry {
   kind         LedgerKind
   amount       Decimal    @db.Decimal(18, 4)
   balanceAfter Decimal    @db.Decimal(18, 4)
+  // Numeric provider ids only exist on Scorpio. providerKey ("scorpio:12",
+  // "oroplay:casino-evolution") is the identifier that spans both aggregators.
   providerId   Int?
+  providerKey  String?
   gameCode     String?
   createdAt    DateTime   @default(now())
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([roundId])
   @@index([referenceId])
+  @@index([providerKey, gameCode])
 }
 
 model GameReview {
   id          String            @id @default(cuid())
-  providerId  Int
+  providerId  Int?
+  providerKey String?
   gameCode    String
   userId      String?
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -278,6 +284,7 @@ model GameReview {
   replies     GameReviewReply[]
 
   @@index([providerId, gameCode, createdAt(sort: Desc)])
+  @@index([providerKey, gameCode, createdAt(sort: Desc)])
 }
 
 model GameReviewReply {
