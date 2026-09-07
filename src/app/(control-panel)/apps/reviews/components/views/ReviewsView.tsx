@@ -37,7 +37,7 @@ function ReviewsView() {
 							className="text-sm"
 							color="text.secondary"
 						>
-							Provider {row.original.providerId}
+							{row.original.source} / {row.original.providerId}
 						</Typography>
 					</div>
 				)

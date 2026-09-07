@@ -105,7 +105,8 @@ export function serializeLedger(entry: {
 	kind: string;
 	amount: { toString(): string } | number;
 	balanceAfter: { toString(): string } | number;
-	providerId: number | null;
+	source: string;
+	providerId: string | null;
 	gameCode: string | null;
 	createdAt: Date;
 	user?: { firstName: string; lastName: string; email: string };
@@ -121,6 +122,7 @@ export function serializeLedger(entry: {
 		kind: entry.kind,
 		amount: money(entry.amount),
 		balanceAfter: money(entry.balanceAfter),
+		source: entry.source,
 		providerId: entry.providerId,
 		gameCode: entry.gameCode,
 		createdAt: entry.createdAt.toISOString()

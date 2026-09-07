@@ -27,7 +27,8 @@ function GamesView() {
 			{
 				accessorKey: 'providerId',
 				header: 'Provider',
-				Cell: ({ cell }) => cell.getValue<number | null>() || '—'
+				Cell: ({ row }) =>
+					row.original.providerId ? `${row.original.source} / ${row.original.providerId}` : '—'
 			},
 			{ accessorKey: 'rounds', header: 'Rounds' },
 			{

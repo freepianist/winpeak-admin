@@ -20,6 +20,22 @@ enum LedgerKind {
   REFERRAL
 }
 
+/// Which aggregator a provider, game or transaction belongs to. Lowercase so one
+/// spelling serves the database, the app's TypeScript union and the aggregators' own
+/// wire formats. Mirrors winpeak/prisma/schema.prisma.
+enum GameSource {
+  scorpio
+  oroplay
+}
+
+/// A ledger entry's origin. `internal` covers money the casino moves itself, which
+/// belongs to no aggregator but still needs its own transaction id namespace.
+enum LedgerSource {
+  scorpio
+  oroplay
+  internal
+}
+
 enum PromoKind {
   WELCOME
   RELOAD
@@ -134,6 +150,7 @@ model User {
   firstName             String
   lastName              String
   scorpioPlayerCode     Int?
+  oroplayUserCode       String?
   status                UserStatus             @default(ACTIVE)
   notes                 String?
   referredByAffiliateId String?
@@ -249,24 +266,30 @@ model LedgerEntry {
   id           String     @id @default(cuid())
   userId       String
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  providerTxId String?    @unique
+  source       LedgerSource @default(internal)
+  providerTxId String?
   referenceId  String?
   roundId      String?
   kind         LedgerKind
   amount       Decimal    @db.Decimal(18, 4)
   balanceAfter Decimal    @db.Decimal(18, 4)
-  providerId   Int?
+  /// Scorpio's numeric provider id or Oroplay's vendor code, stored as the source
+  /// spells it. Null on internal entries, which belong to no provider.
+  providerId   String?
   gameCode     String?
   createdAt    DateTime   @default(now())
 
+  @@unique([source, providerTxId])
   @@index([userId, createdAt(sort: Desc)])
-  @@index([roundId])
+  @@index([source, roundId])
   @@index([referenceId])
+  @@index([source, providerId, gameCode])
 }
 
 model GameReview {
   id          String            @id @default(cuid())
-  providerId  Int
+  source      GameSource
+  providerId  String
   gameCode    String
   userId      String?
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -277,7 +300,7 @@ model GameReview {
   createdAt   DateTime          @default(now())
   replies     GameReviewReply[]
 
-  @@index([providerId, gameCode, createdAt(sort: Desc)])
+  @@index([source, providerId, gameCode, createdAt(sort: Desc)])
 }
 
 model GameReviewReply {
