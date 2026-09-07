@@ -65,6 +65,22 @@ export const useUpdateWalletRequest = () => {
 	});
 };
 
+/** Reconciles a stuck payout against NOWPayments and settles it if it finished. */
+export const useSyncWalletRequest = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({ id }: { id: string }) => winpeakApi.syncWalletRequest(id),
+		onSuccess: (data) => {
+			queryClient.invalidateQueries({ queryKey: walletRequestsQueryKey });
+			queryClient.invalidateQueries({ queryKey: playersQueryKey });
+			queryClient.invalidateQueries({ queryKey: playerQueryKey(data.userId) });
+			queryClient.invalidateQueries({ queryKey: ['winpeak', 'ledger'] });
+			queryClient.invalidateQueries({ queryKey: statsQueryKey });
+		}
+	});
+};
+
 export const useResetPassword = (id: string) => {
 	return useMutation({
 		mutationFn: (password: string) => winpeakApi.resetPassword(id, password)

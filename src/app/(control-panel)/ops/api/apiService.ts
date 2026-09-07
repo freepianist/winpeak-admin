@@ -18,6 +18,7 @@ import type {
 	Subscriber,
 	SuccessStory,
 	WalletRequest,
+	WalletRequestSync,
 	PromoOffer,
 	PromosPayload,
 	PlayerBonus,
@@ -55,6 +56,8 @@ export const winpeakApi = {
 	},
 	updateWalletRequest: (id: string, data: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string }) =>
 		unwrap(api.patch(`winpeak/wallet-requests/${id}`, { json: data }).json<WalletRequest>()),
+	syncWalletRequest: (id: string) =>
+		unwrap(api.post(`winpeak/wallet-requests/${id}/sync`).json<WalletRequestSync>()),
 	getLedger: (params?: { kind?: string; userId?: string }) => {
 		const search = new URLSearchParams();
 		if (params?.kind) search.set('kind', params.kind);

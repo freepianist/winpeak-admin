@@ -105,7 +105,8 @@ export function serializeLedger(entry: {
 	kind: string;
 	amount: { toString(): string } | number;
 	balanceAfter: { toString(): string } | number;
-	providerId: number | null;
+	source: string;
+	providerId: string | null;
 	gameCode: string | null;
 	createdAt: Date;
 	user?: { firstName: string; lastName: string; email: string };
@@ -121,6 +122,7 @@ export function serializeLedger(entry: {
 		kind: entry.kind,
 		amount: money(entry.amount),
 		balanceAfter: money(entry.balanceAfter),
+		source: entry.source,
 		providerId: entry.providerId,
 		gameCode: entry.gameCode,
 		createdAt: entry.createdAt.toISOString()
@@ -143,6 +145,13 @@ export function serializeWalletRequest(row: {
 	providerRef?: string | null;
 	providerStatus?: string | null;
 	autoProcessed?: boolean;
+	conversionId?: string | null;
+	conversionStatus?: string | null;
+	settleCurrency?: string | null;
+	settleAmount?: { toString(): string } | number | null;
+	paidAmount?: { toString(): string } | number | null;
+	creditedAmount?: { toString(): string } | number | null;
+	paymentOutcome?: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	user?: {
@@ -171,6 +180,13 @@ export function serializeWalletRequest(row: {
 		providerRef: row.providerRef || '',
 		providerStatus: row.providerStatus || '',
 		autoProcessed: Boolean(row.autoProcessed),
+		conversionId: row.conversionId || '',
+		conversionStatus: row.conversionStatus || '',
+		settleCurrency: row.settleCurrency || '',
+		settleAmount: row.settleAmount == null ? null : money(row.settleAmount),
+		paidAmount: row.paidAmount == null ? null : money(row.paidAmount),
+		creditedAmount: row.creditedAmount == null ? null : money(row.creditedAmount),
+		paymentOutcome: row.paymentOutcome || '',
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString()
 	};

@@ -40,6 +40,12 @@ export type LedgerKind =
 	| 'CASHBACK'
 	| 'REFERRAL';
 
+/** Which aggregator a provider, game or transaction belongs to. */
+export type GameSource = 'scorpio' | 'oroplay';
+
+/** A ledger entry's origin. `internal` is money the casino moves itself. */
+export type LedgerSource = GameSource | 'internal';
+
 export type WalletRequestType = 'DEPOSIT' | 'WITHDRAW';
 export type WalletRequestStatus = 'PENDING' | 'PROCESSING' | 'APPROVED' | 'REJECTED';
 
@@ -62,8 +68,23 @@ export type WalletRequest = {
 	providerRef: string;
 	providerStatus: string;
 	autoProcessed: boolean;
+	conversionId: string;
+	conversionStatus: string;
+	settleCurrency: string;
+	settleAmount: number | null;
+	/** Coin units the player sent, and what they were worth once credited. */
+	paidAmount: number | null;
+	creditedAmount: number | null;
+	/** EXACT, UNDERPAID or OVERPAID against the invoiced amount. */
+	paymentOutcome: string;
 	createdAt: string;
 	updatedAt: string;
+};
+
+/** A wallet request plus what reconciling it against NOWPayments found. */
+export type WalletRequestSync = WalletRequest & {
+	syncChanged: boolean;
+	syncMessage: string;
 };
 
 export type LedgerItem = {
@@ -77,7 +98,9 @@ export type LedgerItem = {
 	kind: LedgerKind;
 	amount: number;
 	balanceAfter: number;
-	providerId: number | null;
+	/** `internal` for money the casino moves itself, which has no provider. */
+	source: LedgerSource;
+	providerId: string | null;
 	gameCode: string | null;
 	createdAt: string;
 };
@@ -117,7 +140,9 @@ export type ReviewReply = {
 
 export type GameReview = {
 	id: string;
-	providerId: number;
+	source: GameSource;
+	/** Scorpio's numeric provider id or Oroplay's vendor code, as that source spells it. */
+	providerId: string;
 	gameCode: string;
 	userId: string | null;
 	playerName: string;
@@ -157,7 +182,8 @@ export type Subscriber = {
 };
 
 export type GameStat = {
-	providerId: number | null;
+	source: string;
+	providerId: string | null;
 	gameCode: string;
 	bets: number;
 	wins: number;

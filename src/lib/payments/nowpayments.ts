@@ -1,8 +1,9 @@
 import { createHmac } from 'crypto';
+import { ProxyAgent, fetch as proxiedFetch } from 'undici';
 
 const API_BASE = 'https://api.nowpayments.io/v1';
 
-type JsonMap = Record<string, unknown>;
+export type JsonMap = Record<string, unknown>;
 
 let cachedJwt: { token: string; exp: number } | null = null;
 
@@ -34,7 +35,26 @@ function apiError(payload: unknown, fallback: string) {
 	return fallback;
 }
 
-async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) {
+/**
+ * NOWPayments ties its IP whitelist to the API key, so every call has to leave
+ * from one address. Serverless hosts have no stable egress IP, so a static-IP
+ * proxy stands in for one when NOWPAYMENTS_PROXY_URL is set.
+ *
+ * undici's `fetch` is used directly rather than the global one: Next.js wraps
+ * `fetch` for caching and can rebuild the request, which would drop the
+ * dispatcher and quietly send the call from the wrong IP.
+ */
+let proxyAgent: ProxyAgent | null | undefined;
+
+function proxyDispatcher() {
+	if (proxyAgent === undefined) {
+		const url = process.env.NOWPAYMENTS_PROXY_URL?.trim();
+		proxyAgent = url ? new ProxyAgent(url) : null;
+	}
+	return proxyAgent;
+}
+
+export async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) {
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
 		'x-api-key': nowpaymentsApiKey(),
@@ -42,7 +62,15 @@ async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) 
 	};
 	if (token) headers.Authorization = `Bearer ${token}`;
 
-	const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+	const dispatcher = proxyDispatcher();
+	const response = dispatcher
+		? await proxiedFetch(`${API_BASE}${path}`, {
+				method: init.method,
+				body: init.body as string | undefined,
+				headers,
+				dispatcher
+			})
+		: await fetch(`${API_BASE}${path}`, { ...init, headers });
 	const payload = (await response.json().catch(() => null)) as unknown;
 	if (!response.ok) {
 		throw new Error(apiError(payload, `NOWPayments request failed (${response.status})`));
@@ -50,7 +78,7 @@ async function npFetch<T>(path: string, init: RequestInit = {}, token?: string) 
 	return payload as T;
 }
 
-async function getJwt() {
+export async function getJwt() {
 	const email = process.env.NOWPAYMENTS_EMAIL?.trim();
 	const password = process.env.NOWPAYMENTS_PASSWORD;
 	if (!email || !password) {
@@ -101,7 +129,7 @@ function decodeBase32(input: string) {
 	return Buffer.from(bytes);
 }
 
-async function estimateCryptoAmount(amountUsd: number, currency: string) {
+export async function estimateCryptoAmount(amountUsd: number, currency: string) {
 	const query = new URLSearchParams({
 		amount: String(amountUsd),
 		currency_from: 'usd',
@@ -127,6 +155,9 @@ export async function createPayout(input: {
 
 	const token = await getJwt();
 	const currency = input.currency.toLowerCase();
+	// Sent as the crypto `amount` only. Passing `fiat_amount` alongside it makes
+	// NOWPayments ignore `amount` entirely and re-derive the payout from fiat,
+	// which would no longer match the amount the treasury conversion produced.
 	const cryptoAmount = await estimateCryptoAmount(input.amountUsd, currency);
 	const ipn = getIpnCallbackUrl();
 	const created = await npFetch<{ id?: string | number; status?: string; withdrawals?: JsonMap[] }>(
@@ -140,10 +171,13 @@ export async function createPayout(input: {
 						address: input.address,
 						currency,
 						amount: cryptoAmount,
-						fiat_amount: Number(input.amountUsd.toFixed(2)),
-						fiat_currency: 'usd',
 						ipn_callback_url: ipn,
-						extra_id: input.requestId
+						// Never send extra_id here. NOWPayments matches whitelisted
+						// payout addresses on (currency, address, extra_id), so any
+						// value makes even a whitelisted address fail with
+						// "address is not whitelisted". It is a memo/tag field for
+						// chains like XRP, not a place for our own reference.
+						unique_external_id: input.requestId
 					}
 				]
 			})

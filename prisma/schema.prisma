@@ -20,6 +20,22 @@ enum LedgerKind {
   REFERRAL
 }
 
+/// Which aggregator a provider, game or transaction belongs to. Lowercase so one
+/// spelling serves the database, the app's TypeScript union and the aggregators' own
+/// wire formats. Mirrors winpeak/prisma/schema.prisma.
+enum GameSource {
+  scorpio
+  oroplay
+}
+
+/// A ledger entry's origin. `internal` covers money the casino moves itself, which
+/// belongs to no aggregator but still needs its own transaction id namespace.
+enum LedgerSource {
+  scorpio
+  oroplay
+  internal
+}
+
 enum PromoKind {
   WELCOME
   RELOAD
@@ -134,6 +150,7 @@ model User {
   firstName             String
   lastName              String
   scorpioPlayerCode     Int?
+  oroplayUserCode       String?
   status                UserStatus             @default(ACTIVE)
   notes                 String?
   referredByAffiliateId String?
@@ -197,36 +214,82 @@ model WalletRequest {
   invoiceUrl     String?
   providerRef    String?             @unique
   providerStatus String?
+  // NOWPayments payment id, distinct from providerRef (the invoice id). Needed to
+  // send a player back to the payment they already started instead of a new one.
+  providerPaymentId String?
+  // Coin units the player actually sent, and what they were worth in USD once
+  // credited. Both are tracked because a deposit can be paid in instalments, so
+  // creditedAmount is the running total already in the wallet.
+  paidAmount     Decimal?            @db.Decimal(18, 8)
+  creditedAmount Decimal?            @db.Decimal(18, 4)
+  // EXACT, UNDERPAID or OVERPAID, compared against the invoiced amount
+  paymentOutcome String?
   autoProcessed  Boolean             @default(false)
+  // Custody conversion funding a payout in a coin other than the settlement currency
+  conversionId     String?
+  conversionStatus String?
+  // What the casino actually received/spent in its settlement currency
+  settleCurrency String?
+  settleAmount   Decimal?            @db.Decimal(18, 8)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  payments       DepositPayment[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([conversionId])
+}
+
+/**
+ * One row per NOWPayments payment against a deposit invoice. An invoice can hold
+ * several payments, so crediting has to be tracked per payment: without this a
+ * player paying the same invoice twice looks identical to one callback arriving
+ * twice, and the second payment gets swallowed as a duplicate.
+ */
+model DepositPayment {
+  id             String        @id @default(cuid())
+  requestId      String
+  request        WalletRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  // NOWPayments payment id. Invoices settled before this table existed are
+  // backfilled under a "legacy:<requestId>" key so totals stay correct.
+  paymentId      String        @unique
+  paidAmount     Decimal?      @db.Decimal(18, 8)
+  creditedAmount Decimal       @default(0) @db.Decimal(18, 4)
+  providerStatus String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([requestId])
 }
 
 model LedgerEntry {
   id           String     @id @default(cuid())
   userId       String
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  providerTxId String?    @unique
+  source       LedgerSource @default(internal)
+  providerTxId String?
   referenceId  String?
   roundId      String?
   kind         LedgerKind
   amount       Decimal    @db.Decimal(18, 4)
   balanceAfter Decimal    @db.Decimal(18, 4)
-  providerId   Int?
+  /// Scorpio's numeric provider id or Oroplay's vendor code, stored as the source
+  /// spells it. Null on internal entries, which belong to no provider.
+  providerId   String?
   gameCode     String?
   createdAt    DateTime   @default(now())
 
+  @@unique([source, providerTxId])
   @@index([userId, createdAt(sort: Desc)])
-  @@index([roundId])
+  @@index([source, roundId])
   @@index([referenceId])
+  @@index([source, providerId, gameCode])
 }
 
 model GameReview {
   id          String            @id @default(cuid())
-  providerId  Int
+  source      GameSource
+  providerId  String
   gameCode    String
   userId      String?
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -237,7 +300,7 @@ model GameReview {
   createdAt   DateTime          @default(now())
   replies     GameReviewReply[]
 
-  @@index([providerId, gameCode, createdAt(sort: Desc)])
+  @@index([source, providerId, gameCode, createdAt(sort: Desc)])
 }
 
 model GameReviewReply {

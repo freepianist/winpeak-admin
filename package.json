@@ -97,6 +97,7 @@
     "stylis": "4.3.6",
     "stylis-plugin-rtl": "2.1.1",
     "type-fest": "4.41.0",
+    "undici": "^8.10.1",
     "unstorage": "1.17.4",
     "uuid": "13.0.0",
     "zod": "4.3.6"
