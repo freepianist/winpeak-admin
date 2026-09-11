@@ -18,6 +18,7 @@ import { motion } from 'motion/react';
 import { type MRT_ColumnDef } from 'material-react-table';
 import DataTable from 'src/components/data-table/DataTable';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
+import ApproveManualDepositDialog from '@/app/(control-panel)/apps/wallet-requests/components/ui/ApproveManualDepositDialog';
 import {
 	usePlayer,
 	useResetPassword,
@@ -56,6 +57,7 @@ function PlayerView() {
 	const updateRequest = useUpdateWalletRequest();
 	const forfeitBonus = useForfeitBonus();
 	const [password, setPassword] = useState('');
+	const [approveId, setApproveId] = useState<string | null>(null);
 
 	const methods = useForm<FormType>({
 		mode: 'onChange',
@@ -112,7 +114,23 @@ function PlayerView() {
 			{
 				accessorKey: 'amount',
 				header: 'Amount',
-				Cell: ({ row }) => formatMoney(row.original.amount, player?.currency)
+				Cell: ({ row }) => {
+					const { amount, creditedAmount } = row.original;
+					const differs = creditedAmount !== null && Math.abs(creditedAmount - amount) >= 0.01;
+					return (
+						<div>
+							{formatMoney(amount, player?.currency)}
+							{differs ? (
+								<Typography
+									className="text-sm"
+									color="text.secondary"
+								>
+									{formatMoney(creditedAmount, player?.currency)} credited
+								</Typography>
+							) : null}
+						</div>
+					);
+				}
 			},
 			{
 				id: 'destination',
@@ -153,12 +171,19 @@ function PlayerView() {
 							<Button
 								size="small"
 								color="secondary"
-								onClick={() =>
+								onClick={() => {
+									if (row.original.manual && row.original.type === 'DEPOSIT') {
+										setApproveId(row.original.id);
+										return;
+									}
+
 									void updateRequest
 										.mutateAsync({ id: row.original.id, status: 'APPROVED' })
-										.then((row) =>
+										.then((updated) =>
 											enqueueSnackbar(
-												row.status === 'PROCESSING' ? 'Payout submitted' : 'Request approved',
+												updated.status === 'PROCESSING'
+													? 'Payout submitted'
+													: 'Request approved',
 												{ variant: 'success' }
 											)
 										)
@@ -167,8 +192,8 @@ function PlayerView() {
 												error instanceof Error ? error.message : 'Could not approve',
 												{ variant: 'error' }
 											)
-										)
-								}
+										);
+								}}
 							>
 								Approve
 							</Button>
@@ -240,6 +265,8 @@ function PlayerView() {
 			enqueueSnackbar(error instanceof Error ? error.message : 'Could not reset password', { variant: 'error' });
 		}
 	}
+
+	const approving = walletRequests.find((request) => request.id === approveId) || null;
 
 	return (
 		<FusePageCarded
@@ -493,6 +520,37 @@ function PlayerView() {
 								enableRowSelection={false}
 							/>
 						</Paper>
+						<ApproveManualDepositDialog
+							request={approving}
+							busy={updateRequest.isPending}
+							onClose={() => setApproveId(null)}
+							onConfirm={(creditedAmount) => {
+								if (!approving) return;
+
+								void updateRequest
+									.mutateAsync({
+										id: approving.id,
+										status: 'APPROVED',
+										creditedAmount
+									})
+									.then((updated) => {
+										setApproveId(null);
+										const credited = updated.creditedAmount;
+										enqueueSnackbar(
+											credited !== null && Math.abs(credited - approving.amount) >= 0.01
+												? `Credited ${formatMoney(credited, updated.currency)} (requested ${formatMoney(approving.amount, updated.currency)})`
+												: 'Request approved',
+											{ variant: 'success' }
+										);
+									})
+									.catch((error: unknown) =>
+										enqueueSnackbar(
+											error instanceof Error ? error.message : 'Could not approve',
+											{ variant: 'error' }
+										)
+									);
+							}}
+						/>
 					</motion.div>
 
 					<motion.div

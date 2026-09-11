@@ -17,6 +17,7 @@ import Link from '@fuse/core/Link';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
+import ApproveManualDepositDialog from '../ui/ApproveManualDepositDialog';
 import WalletRequestDetailsDialog from '../ui/WalletRequestDetailsDialog';
 import {
 	useSyncWalletRequest,
@@ -114,10 +115,12 @@ function WalletRequestsView() {
 	const update = useUpdateWalletRequest();
 	const sync = useSyncWalletRequest();
 	const [detailsId, setDetailsId] = useState<string | null>(null);
+	const [approveId, setApproveId] = useState<string | null>(null);
 
 	// Held by id rather than by row so the dialog follows a refetch, which matters
 	// while it is open next to a request being approved.
 	const details = requests.find((request) => request.id === detailsId) || null;
+	const approving = requests.find((request) => request.id === approveId) || null;
 
 	const columns = useMemo<MRT_ColumnDef<WalletRequest>[]>(
 		() => [
@@ -294,10 +297,15 @@ function WalletRequestsView() {
 										manualWithdraw
 											? 'Send the coins from the casino wallet first — this only records that you did, and debits the player'
 											: request.manual
-												? 'Check the transaction on-chain first — this credits the player straight away'
+												? 'Check the transaction on-chain first — you will enter the USD that actually arrived'
 												: undefined
 									}
-									onClick={() =>
+									onClick={() => {
+										if (request.manual && request.type === 'DEPOSIT') {
+											setApproveId(request.id);
+											return;
+										}
+
 										void update
 											.mutateAsync({ id: request.id, status: 'APPROVED' })
 											.then((updated) =>
@@ -315,8 +323,8 @@ function WalletRequestsView() {
 													error instanceof Error ? error.message : 'Could not approve',
 													{ variant: 'error' }
 												)
-											)
-									}
+											);
+									}}
 								>
 									{manualWithdraw ? 'Mark paid' : 'Approve'}
 								</Button>
@@ -412,6 +420,37 @@ function WalletRequestsView() {
 					<WalletRequestDetailsDialog
 						request={details}
 						onClose={() => setDetailsId(null)}
+					/>
+					<ApproveManualDepositDialog
+						request={approving}
+						busy={update.isPending}
+						onClose={() => setApproveId(null)}
+						onConfirm={(creditedAmount) => {
+							if (!approving) return;
+
+							void update
+								.mutateAsync({
+									id: approving.id,
+									status: 'APPROVED',
+									creditedAmount
+								})
+								.then((updated) => {
+									setApproveId(null);
+									const credited = updated.creditedAmount;
+									enqueueSnackbar(
+										credited !== null && Math.abs(credited - approving.amount) >= 0.01
+											? `Credited ${formatMoney(credited, updated.currency)} (requested ${formatMoney(approving.amount, updated.currency)})`
+											: 'Request approved',
+										{ variant: 'success' }
+									);
+								})
+								.catch((error: unknown) =>
+									enqueueSnackbar(
+										error instanceof Error ? error.message : 'Could not approve',
+										{ variant: 'error' }
+									)
+								);
+						}}
 					/>
 				</Paper>
 			}

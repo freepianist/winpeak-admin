@@ -49,12 +49,14 @@ export const useUpdateWalletRequest = () => {
 		mutationFn: ({
 			id,
 			status,
-			reviewNote
+			reviewNote,
+			creditedAmount
 		}: {
 			id: string;
 			status: 'APPROVED' | 'REJECTED';
 			reviewNote?: string;
-		}) => winpeakApi.updateWalletRequest(id, { status, reviewNote }),
+			creditedAmount?: number;
+		}) => winpeakApi.updateWalletRequest(id, { status, reviewNote, creditedAmount }),
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: walletRequestsQueryKey });
 			queryClient.invalidateQueries({ queryKey: playersQueryKey });

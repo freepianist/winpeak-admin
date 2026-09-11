@@ -1,6 +1,6 @@
 import { badRequest, notFound, requireAdmin, unauthorized } from '@/lib/admin-auth';
 import { serializeWalletRequest } from '@/lib/serializers';
-import { approveWalletRequest, rejectWalletRequest } from '@/lib/wallet';
+import { approveWalletRequest, parseCreditedUsd, rejectWalletRequest } from '@/lib/wallet';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -12,13 +12,18 @@ export async function PATCH(request: Request, context: RouteContext) {
 	}
 
 	const { id } = await context.params;
-	const body = (await request.json()) as { status?: string; reviewNote?: string };
+	const body = (await request.json()) as {
+		status?: string;
+		reviewNote?: string;
+		creditedAmount?: unknown;
+	};
 	const status = String(body.status || '').toUpperCase();
 	const reviewedBy = session.db?.email || session.user?.email || 'admin';
 
 	try {
 		if (status === 'APPROVED') {
-			const updated = await approveWalletRequest(id, reviewedBy, body.reviewNote);
+			const creditedAmount = parseCreditedUsd(body.creditedAmount);
+			const updated = await approveWalletRequest(id, reviewedBy, body.reviewNote, creditedAmount);
 			return Response.json(serializeWalletRequest(updated));
 		}
 

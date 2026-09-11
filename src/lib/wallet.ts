@@ -129,7 +129,40 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 	return prisma.$transaction(run, TX);
 }
 
-export async function approveWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
+/** Same band NOWPayments uses: a few cents either side still counts as exact. */
+const CREDIT_TOLERANCE_USD = 0.05;
+
+function classifyManualCredit(credited: number, requested: number) {
+	if (credited + CREDIT_TOLERANCE_USD < requested) return 'UNDERPAID' as const;
+	if (credited > requested + CREDIT_TOLERANCE_USD) return 'OVERPAID' as const;
+	return 'EXACT' as const;
+}
+
+/** USD staff typed as what actually arrived. Empty is omitted, not zero. */
+export function parseCreditedUsd(value: unknown): number | undefined {
+	if (value === undefined || value === null || value === '') return undefined;
+
+	const n = typeof value === 'number' ? value : Number(String(value).trim());
+	if (!Number.isFinite(n)) {
+		throw new Error('Enter a valid amount received');
+	}
+
+	const rounded = Number(n.toFixed(2));
+	if (rounded < 0.01) {
+		throw new Error('Amount received must be at least $0.01');
+	}
+	if (rounded > 1_000_000) {
+		throw new Error('Amount received is too large');
+	}
+	return rounded;
+}
+
+export async function approveWalletRequest(
+	requestId: string,
+	reviewedBy: string,
+	reviewNote?: string,
+	creditedAmount?: number
+) {
 	const request = await prisma.walletRequest.findUnique({ where: { id: requestId } });
 
 	if (!request) {
@@ -270,11 +303,65 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 		}
 	}
 
+	if (request.manual && creditedAmount == null) {
+		throw new Error('Enter the amount received before approving a manual deposit');
+	}
+
 	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
 		const latest = await lockWalletRequest(tx, requestId);
 
 		if (!latest || latest.status !== 'PENDING') {
 			throw new Error('Request is no longer pending');
+		}
+
+		// On the manual rail the coins already moved, and what landed can differ
+		// from what the player asked to deposit. Staff type the USD that actually
+		// arrived; that figure is credited, not the request amount.
+		if (latest.manual) {
+			if (creditedAmount == null) {
+				throw new Error('Enter the amount received before approving a manual deposit');
+			}
+
+			const received = creditedAmount;
+			const requested = money(latest.amount);
+			const alreadyCredited = latest.creditedAmount == null ? 0 : money(latest.creditedAmount);
+			const toCredit = Number((received - alreadyCredited).toFixed(2));
+
+			if (toCredit < 0.01) {
+				throw new Error('This deposit has already been credited that amount');
+			}
+
+			await applyDeposit(latest.userId, toCredit, tx);
+			await tx.depositPayment.create({
+				data: {
+					requestId,
+					paymentId: `manual:${requestId}`,
+					creditedAmount: toCredit,
+					providerStatus: latest.providerStatus
+				}
+			});
+
+			const outcome = classifyManualCredit(received, requested);
+			const updated = await tx.walletRequest.update({
+				where: { id: requestId },
+				data: {
+					status: 'APPROVED',
+					creditedAmount: received,
+					paymentOutcome: outcome,
+					reviewedBy,
+					reviewedAt: new Date(),
+					reviewNote:
+						reviewNote?.trim() ||
+						(outcome === 'EXACT'
+							? 'Credited the requested amount'
+							: `Credited $${received.toFixed(2)} of $${requested.toFixed(2)} requested`)
+				},
+				include: {
+					user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
+				}
+			});
+
+			return { request: updated, credited: toCredit };
 		}
 
 		// An underpaid invoice has already credited whatever arrived, so approving

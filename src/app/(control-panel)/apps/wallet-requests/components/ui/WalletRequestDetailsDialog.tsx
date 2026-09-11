@@ -84,7 +84,6 @@ function WalletRequestDetailsDialog(props: { request: WalletRequest | null; onCl
 	}
 
 	const network = request.payCurrency ? request.payCurrency.toUpperCase() : '';
-	const credited = request.creditedAmount !== null && Math.abs(request.creditedAmount - request.amount) >= 0.01;
 
 	return (
 		<Dialog
@@ -120,10 +119,10 @@ function WalletRequestDetailsDialog(props: { request: WalletRequest | null; onCl
 						value={request.playerEmail}
 					/>
 					<Row
-						label="Amount"
+						label={request.type === 'DEPOSIT' ? 'Requested' : 'Amount'}
 						value={formatMoney(request.amount, request.currency)}
 					/>
-					{credited ? (
+					{request.creditedAmount !== null ? (
 						<Row
 							label="Credited"
 							value={formatMoney(request.creditedAmount, request.currency)}

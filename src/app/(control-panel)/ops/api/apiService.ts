@@ -56,8 +56,10 @@ export const winpeakApi = {
 		const suffix = search.toString() ? `?${search.toString()}` : '';
 		return unwrap(api.get(`winpeak/wallet-requests${suffix}`).json<WalletRequest[]>());
 	},
-	updateWalletRequest: (id: string, data: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string }) =>
-		unwrap(api.patch(`winpeak/wallet-requests/${id}`, { json: data }).json<WalletRequest>()),
+	updateWalletRequest: (
+		id: string,
+		data: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string; creditedAmount?: number }
+	) => unwrap(api.patch(`winpeak/wallet-requests/${id}`, { json: data }).json<WalletRequest>()),
 	syncWalletRequest: (id: string) =>
 		unwrap(api.post(`winpeak/wallet-requests/${id}/sync`).json<WalletRequestSync>()),
 	getLedger: (params?: { kind?: string; userId?: string }) => {
