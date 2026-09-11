@@ -75,6 +75,9 @@ function PaymentSettingsView() {
 			wallets: emptyWallets()
 		}
 	});
+	// Subscribe before the loading return. Save used to short-circuit on
+	// !isDirty, so the first manual-mode toggle never marked the form valid.
+	const { isDirty, isValid } = formState;
 
 	useEffect(() => {
 		if (!settings) {
@@ -128,7 +131,7 @@ function PaymentSettingsView() {
 						<Button
 							variant="contained"
 							color="secondary"
-							disabled={saving || !formState.isDirty || !formState.isValid}
+							disabled={saving || !isDirty || !isValid}
 							startIcon={<FuseSvgIcon size={18}>lucide:save</FuseSvgIcon>}
 							onClick={handleSubmit(onSave)}
 						>
