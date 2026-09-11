@@ -71,6 +71,13 @@ const navigationConfig: FuseNavItemType[] = [
 				url: '/apps/promos'
 			},
 			{
+				id: 'apps.payment-settings',
+				title: 'Payment settings',
+				type: 'item',
+				icon: 'lucide:credit-card',
+				url: '/apps/payment-settings'
+			},
+			{
 				id: 'apps.blocked-countries',
 				title: 'Blocked countries',
 				type: 'item',

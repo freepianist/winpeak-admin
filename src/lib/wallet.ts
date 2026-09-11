@@ -129,7 +129,40 @@ export async function applyWithdraw(userId: string, amount: number, tx?: Prisma.
 	return prisma.$transaction(run, TX);
 }
 
-export async function approveWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
+/** Same band NOWPayments uses: a few cents either side still counts as exact. */
+const CREDIT_TOLERANCE_USD = 0.05;
+
+function classifyManualCredit(credited: number, requested: number) {
+	if (credited + CREDIT_TOLERANCE_USD < requested) return 'UNDERPAID' as const;
+	if (credited > requested + CREDIT_TOLERANCE_USD) return 'OVERPAID' as const;
+	return 'EXACT' as const;
+}
+
+/** USD staff typed as what actually arrived. Empty is omitted, not zero. */
+export function parseCreditedUsd(value: unknown): number | undefined {
+	if (value === undefined || value === null || value === '') return undefined;
+
+	const n = typeof value === 'number' ? value : Number(String(value).trim());
+	if (!Number.isFinite(n)) {
+		throw new Error('Enter a valid amount received');
+	}
+
+	const rounded = Number(n.toFixed(2));
+	if (rounded < 0.01) {
+		throw new Error('Amount received must be at least $0.01');
+	}
+	if (rounded > 1_000_000) {
+		throw new Error('Amount received is too large');
+	}
+	return rounded;
+}
+
+export async function approveWalletRequest(
+	requestId: string,
+	reviewedBy: string,
+	reviewNote?: string,
+	creditedAmount?: number
+) {
 	const request = await prisma.walletRequest.findUnique({ where: { id: requestId } });
 
 	if (!request) {
@@ -149,6 +182,20 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 	if (request.type === 'WITHDRAW') {
 		if (!request.payoutAddress) {
 			throw new Error('This withdrawal has no crypto address. Reject it or ask the player to resubmit.');
+		}
+
+		// Raised on the manual rail, so there is no payout to submit: staff send the
+		// coins from the casino wallet themselves and approving only writes down
+		// that it happened. Debiting before the transfer would be wrong, which is
+		// why this reads as a confirmation rather than an instruction.
+		if (request.manual) {
+			return finalizeSyncedWithdraw(
+				requestId,
+				reviewedBy,
+				'paid',
+				'manual_paid',
+				reviewNote?.trim() || 'Paid by hand from the casino wallet'
+			);
 		}
 
 		if (!isPayoutConfigured()) {
@@ -256,11 +303,65 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 		}
 	}
 
+	if (request.manual && creditedAmount == null) {
+		throw new Error('Enter the amount received before approving a manual deposit');
+	}
+
 	const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
 		const latest = await lockWalletRequest(tx, requestId);
 
 		if (!latest || latest.status !== 'PENDING') {
 			throw new Error('Request is no longer pending');
+		}
+
+		// On the manual rail the coins already moved, and what landed can differ
+		// from what the player asked to deposit. Staff type the USD that actually
+		// arrived; that figure is credited, not the request amount.
+		if (latest.manual) {
+			if (creditedAmount == null) {
+				throw new Error('Enter the amount received before approving a manual deposit');
+			}
+
+			const received = creditedAmount;
+			const requested = money(latest.amount);
+			const alreadyCredited = latest.creditedAmount == null ? 0 : money(latest.creditedAmount);
+			const toCredit = Number((received - alreadyCredited).toFixed(2));
+
+			if (toCredit < 0.01) {
+				throw new Error('This deposit has already been credited that amount');
+			}
+
+			await applyDeposit(latest.userId, toCredit, tx);
+			await tx.depositPayment.create({
+				data: {
+					requestId,
+					paymentId: `manual:${requestId}`,
+					creditedAmount: toCredit,
+					providerStatus: latest.providerStatus
+				}
+			});
+
+			const outcome = classifyManualCredit(received, requested);
+			const updated = await tx.walletRequest.update({
+				where: { id: requestId },
+				data: {
+					status: 'APPROVED',
+					creditedAmount: received,
+					paymentOutcome: outcome,
+					reviewedBy,
+					reviewedAt: new Date(),
+					reviewNote:
+						reviewNote?.trim() ||
+						(outcome === 'EXACT'
+							? 'Credited the requested amount'
+							: `Credited $${received.toFixed(2)} of $${requested.toFixed(2)} requested`)
+				},
+				include: {
+					user: { select: { firstName: true, lastName: true, email: true, wallet: true } }
+				}
+			});
+
+			return { request: updated, credited: toCredit };
 		}
 
 		// An underpaid invoice has already credited whatever arrived, so approving
@@ -288,7 +389,11 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 				await tx.depositPayment.create({
 					data: {
 						requestId,
-						paymentId: `legacy:${requestId}`,
+						// A manual deposit has no NOWPayments payment to key against, so
+						// the request stands in for one. Kept distinct from the "legacy:"
+						// prefix used to backfill invoices that predate this table, so the
+						// two cannot be mistaken for each other later.
+						paymentId: `${latest.manual ? 'manual' : 'legacy'}:${requestId}`,
 						creditedAmount: owed,
 						providerStatus: latest.providerStatus
 					}
@@ -350,7 +455,8 @@ const CLAIM_TTL_MS = 5 * 60 * 1000;
 const TICK_STALL_MS = 30 * 60 * 1000;
 
 /**
- * Writes the terminal outcome of a payout we read back from NOWPayments.
+ * Writes the terminal outcome of a payout: one read back from NOWPayments, or
+ * one a member of staff sent by hand on the manual rail.
  *
  * Re-checks the status under lock because the IPN can land while we are still
  * talking to the provider; whichever gets there first wins and the other is a
@@ -442,6 +548,15 @@ export async function syncWalletRequest(requestId: string, reviewedBy: string) {
 
 	if (request.status === 'APPROVED' || request.status === 'REJECTED') {
 		throw new Error(`This request is already ${request.status.toLowerCase()}`);
+	}
+
+	// Nothing was ever submitted to NOWPayments for a manual withdrawal, so there
+	// is no provider record to reconcile against. Approve it once the coins have
+	// been sent, or reject it to hand the funds back.
+	if (request.manual) {
+		throw new Error(
+			'This withdrawal is being paid by hand, so there is nothing at NOWPayments to sync. Approve it once you have sent the coins.'
+		);
 	}
 
 	if (!isPayoutConfigured()) {

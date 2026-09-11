@@ -23,7 +23,9 @@ import type {
 	PromosPayload,
 	PlayerBonus,
 	CashbackRunResult,
-	BlockedCountry
+	BlockedCountry,
+	PaymentSettings,
+	PaymentSettingsInput
 } from './types';
 
 async function unwrap<T>(request: Promise<T>) {
@@ -54,8 +56,10 @@ export const winpeakApi = {
 		const suffix = search.toString() ? `?${search.toString()}` : '';
 		return unwrap(api.get(`winpeak/wallet-requests${suffix}`).json<WalletRequest[]>());
 	},
-	updateWalletRequest: (id: string, data: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string }) =>
-		unwrap(api.patch(`winpeak/wallet-requests/${id}`, { json: data }).json<WalletRequest>()),
+	updateWalletRequest: (
+		id: string,
+		data: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string; creditedAmount?: number }
+	) => unwrap(api.patch(`winpeak/wallet-requests/${id}`, { json: data }).json<WalletRequest>()),
 	syncWalletRequest: (id: string) =>
 		unwrap(api.post(`winpeak/wallet-requests/${id}/sync`).json<WalletRequestSync>()),
 	getLedger: (params?: { kind?: string; userId?: string }) => {
@@ -67,7 +71,7 @@ export const winpeakApi = {
 	},
 	getBlogs: () => unwrap(api.get('winpeak/blogs').json<BlogPost[]>()),
 	getBlog: (id: string) => unwrap(api.get(`winpeak/blogs/${id}`).json<BlogPost>()),
-	uploadImage: (file: File, folder: 'blog' | 'authors' | 'stories') => {
+	uploadImage: (file: File, folder: 'blog' | 'authors' | 'stories' | 'payments') => {
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('folder', folder);
@@ -132,5 +136,8 @@ export const winpeakApi = {
 	addBlockedCountry: (data: { code: string; note?: string }) =>
 		unwrap(api.post('winpeak/blocked-countries', { json: data }).json<BlockedCountry>()),
 	removeBlockedCountry: (code: string) =>
-		unwrap(api.delete(`winpeak/blocked-countries/${code}`).json<{ success: boolean; code: string }>())
+		unwrap(api.delete(`winpeak/blocked-countries/${code}`).json<{ success: boolean; code: string }>()),
+	getPaymentSettings: () => unwrap(api.get('winpeak/payment-settings').json<PaymentSettings>()),
+	updatePaymentSettings: (data: PaymentSettingsInput) =>
+		unwrap(api.patch('winpeak/payment-settings', { json: data }).json<PaymentSettings>())
 };

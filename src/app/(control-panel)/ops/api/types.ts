@@ -30,15 +30,7 @@ export type Player = {
 	activeBonus?: PlayerBonus | null;
 };
 
-export type LedgerKind =
-	| 'BET'
-	| 'WIN'
-	| 'CANCEL'
-	| 'DEPOSIT'
-	| 'WITHDRAW'
-	| 'BONUS'
-	| 'CASHBACK'
-	| 'REFERRAL';
+export type LedgerKind = 'BET' | 'WIN' | 'CANCEL' | 'DEPOSIT' | 'WITHDRAW' | 'BONUS' | 'CASHBACK' | 'REFERRAL';
 
 /** Which aggregator a provider, game or transaction belongs to. */
 export type GameSource = 'scorpio' | 'oroplay';
@@ -68,6 +60,10 @@ export type WalletRequest = {
 	providerRef: string;
 	providerStatus: string;
 	autoProcessed: boolean;
+	/** Raised in manual mode: no invoice or payout exists, so staff settle it by hand. */
+	manual: boolean;
+	/** The transfer the player reported for a manual deposit. */
+	txHash: string;
 	conversionId: string;
 	conversionStatus: string;
 	settleCurrency: string;
@@ -408,4 +404,32 @@ export type BlockedCountry = {
 	note: string;
 	createdAt: string;
 	updatedAt: string;
+};
+
+/** One casino receiving wallet. Returned for every supported coin, configured or not. */
+export type ManualWallet = {
+	payCurrency: string;
+	label: string;
+	address: string;
+	qrImageUrl: string;
+	enabled: boolean;
+	updatedAt: string | null;
+};
+
+export type PaymentSettings = {
+	/** When on, deposits and withdrawals skip NOWPayments and are settled by staff. */
+	manualMode: boolean;
+	/** Manual-rail floors in USD. Only applied while manual mode is on. */
+	manualMinDeposit: number;
+	manualMinWithdraw: number;
+	updatedBy: string;
+	updatedAt: string | null;
+	wallets: ManualWallet[];
+};
+
+export type PaymentSettingsInput = {
+	manualMode: boolean;
+	manualMinDeposit: number;
+	manualMinWithdraw: number;
+	wallets: Omit<ManualWallet, 'label' | 'updatedAt'>[];
 };

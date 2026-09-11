@@ -62,7 +62,7 @@ const globalForPrisma = globalThis as unknown as {
 	prismaGen?: number;
 };
 
-const PRISMA_CLIENT_GEN = 4;
+const PRISMA_CLIENT_GEN = 7;
 
 function createPrisma() {
 	if (!connectionString) {

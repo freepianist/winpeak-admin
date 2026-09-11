@@ -1,10 +1,10 @@
 import { v2 as cloudinary } from 'cloudinary';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-export const UPLOAD_FOLDERS = new Set(['blog', 'authors', 'stories']);
+export const UPLOAD_FOLDERS = new Set(['blog', 'authors', 'stories', 'payments']);
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
-export type UploadFolder = 'blog' | 'authors' | 'stories';
+export type UploadFolder = 'blog' | 'authors' | 'stories' | 'payments';
 
 export function isCloudinaryConfigured() {
 	return Boolean(

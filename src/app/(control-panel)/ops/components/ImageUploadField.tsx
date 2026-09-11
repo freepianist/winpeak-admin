@@ -10,8 +10,8 @@ import { winpeakApi } from '@/app/(control-panel)/ops/api/apiService';
 type ImageUploadFieldProps = {
 	label: string;
 	value: string;
-	folder: 'blog' | 'authors' | 'stories';
-	variant?: 'cover' | 'avatar';
+	folder: 'blog' | 'authors' | 'stories' | 'payments';
+	variant?: 'cover' | 'avatar' | 'qr';
 	helperText?: string;
 	error?: string;
 	onChange: (url: string) => void;
@@ -35,6 +35,9 @@ function ImageUploadField(props: ImageUploadFieldProps) {
 	const [uploading, setUploading] = useState(false);
 	const preview = previewSrc(value);
 	const isAvatar = variant === 'avatar';
+	// A QR has to be shown whole and unscaled-to-fill: cropping it or squashing
+	// the aspect ratio makes it unscannable, which is the one thing that matters.
+	const isQr = variant === 'qr';
 
 	async function handleFile(file?: File) {
 		if (!file) {
@@ -69,14 +72,24 @@ function ImageUploadField(props: ImageUploadFieldProps) {
 			</Typography>
 			<div
 				className={`flex overflow-hidden rounded-lg border border-dashed ${
-					isAvatar ? 'h-32 w-32 items-center justify-center' : 'min-h-40 w-full items-center justify-center'
+					isQr
+						? 'h-44 w-44 items-center justify-center'
+						: isAvatar
+							? 'h-32 w-32 items-center justify-center'
+							: 'min-h-40 w-full items-center justify-center'
 				} bg-gray-50 dark:bg-gray-800`}
 			>
 				{preview ? (
 					<img
 						src={preview}
 						alt={label}
-						className={isAvatar ? 'h-full w-full object-cover' : 'max-h-56 w-full object-cover'}
+						className={
+							isQr
+								? 'h-full w-full bg-white object-contain p-2'
+								: isAvatar
+									? 'h-full w-full object-cover'
+									: 'max-h-56 w-full object-cover'
+						}
 					/>
 				) : (
 					<Typography color="text.disabled">No image</Typography>

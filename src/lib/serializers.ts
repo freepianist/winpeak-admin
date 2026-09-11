@@ -145,6 +145,8 @@ export function serializeWalletRequest(row: {
 	providerRef?: string | null;
 	providerStatus?: string | null;
 	autoProcessed?: boolean;
+	manual?: boolean;
+	txHash?: string | null;
 	conversionId?: string | null;
 	conversionStatus?: string | null;
 	settleCurrency?: string | null;
@@ -180,6 +182,8 @@ export function serializeWalletRequest(row: {
 		providerRef: row.providerRef || '',
 		providerStatus: row.providerStatus || '',
 		autoProcessed: Boolean(row.autoProcessed),
+		manual: Boolean(row.manual),
+		txHash: row.txHash || '',
 		conversionId: row.conversionId || '',
 		conversionStatus: row.conversionStatus || '',
 		settleCurrency: row.settleCurrency || '',

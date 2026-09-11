@@ -225,6 +225,12 @@ model WalletRequest {
   // EXACT, UNDERPAID or OVERPAID, compared against the invoiced amount
   paymentOutcome String?
   autoProcessed  Boolean             @default(false)
+  // Raised in manual mode, so there is no invoice or payout at NOWPayments and
+  // staff settle it by hand. Approval reads this to know which rail to use.
+  manual         Boolean             @default(false)
+  // The transfer the player says they sent for a manual deposit. Unique so the
+  // same on-chain transaction cannot be claimed on a second request.
+  txHash         String?             @unique
   // Custody conversion funding a payout in a coin other than the settlement currency
   conversionId     String?
   conversionStatus String?
@@ -500,4 +506,34 @@ model BlockedCountry {
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/**
+ * Single row ("default") holding the payment rail the casino is running on.
+ * Kept in the database rather than the environment so staff can switch rails
+ * without a redeploy.
+ */
+model PaymentSettings {
+  id                String   @id @default("default")
+  // When on, deposits and withdrawals skip NOWPayments entirely and are
+  // settled by staff from the wallet requests queue.
+  manualMode        Boolean  @default(false)
+  // Manual-rail floors, in USD. Nothing is invoiced or converted on that rail,
+  // so the per-network figures NOWPayments quotes do not apply and staff set
+  // these by hand instead.
+  manualMinDeposit  Float    @default(20)
+  manualMinWithdraw Float    @default(20)
+  updatedBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+/** The casino's own receiving wallet for one network, used in manual mode. */
+model ManualWallet {
+  payCurrency String   @id
+  address     String
+  qrImageUrl  String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
