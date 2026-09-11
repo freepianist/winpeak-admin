@@ -151,6 +151,20 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 			throw new Error('This withdrawal has no crypto address. Reject it or ask the player to resubmit.');
 		}
 
+		// Raised on the manual rail, so there is no payout to submit: staff send the
+		// coins from the casino wallet themselves and approving only writes down
+		// that it happened. Debiting before the transfer would be wrong, which is
+		// why this reads as a confirmation rather than an instruction.
+		if (request.manual) {
+			return finalizeSyncedWithdraw(
+				requestId,
+				reviewedBy,
+				'paid',
+				'manual_paid',
+				reviewNote?.trim() || 'Paid by hand from the casino wallet'
+			);
+		}
+
 		if (!isPayoutConfigured()) {
 			throw new Error(
 				'NOWPayments payouts are not configured in admin. Add API key, email, and password before approving withdrawals.'
@@ -288,7 +302,11 @@ export async function approveWalletRequest(requestId: string, reviewedBy: string
 				await tx.depositPayment.create({
 					data: {
 						requestId,
-						paymentId: `legacy:${requestId}`,
+						// A manual deposit has no NOWPayments payment to key against, so
+						// the request stands in for one. Kept distinct from the "legacy:"
+						// prefix used to backfill invoices that predate this table, so the
+						// two cannot be mistaken for each other later.
+						paymentId: `${latest.manual ? 'manual' : 'legacy'}:${requestId}`,
 						creditedAmount: owed,
 						providerStatus: latest.providerStatus
 					}
@@ -350,7 +368,8 @@ const CLAIM_TTL_MS = 5 * 60 * 1000;
 const TICK_STALL_MS = 30 * 60 * 1000;
 
 /**
- * Writes the terminal outcome of a payout we read back from NOWPayments.
+ * Writes the terminal outcome of a payout: one read back from NOWPayments, or
+ * one a member of staff sent by hand on the manual rail.
  *
  * Re-checks the status under lock because the IPN can land while we are still
  * talking to the provider; whichever gets there first wins and the other is a
@@ -442,6 +461,15 @@ export async function syncWalletRequest(requestId: string, reviewedBy: string) {
 
 	if (request.status === 'APPROVED' || request.status === 'REJECTED') {
 		throw new Error(`This request is already ${request.status.toLowerCase()}`);
+	}
+
+	// Nothing was ever submitted to NOWPayments for a manual withdrawal, so there
+	// is no provider record to reconcile against. Approve it once the coins have
+	// been sent, or reject it to hand the funds back.
+	if (request.manual) {
+		throw new Error(
+			'This withdrawal is being paid by hand, so there is nothing at NOWPayments to sync. Approve it once you have sent the coins.'
+		);
 	}
 
 	if (!isPayoutConfigured()) {
