@@ -227,6 +227,8 @@ export type CommissionStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'VOID';
 export type PayoutStatus = 'PENDING' | 'SENT';
 
 export type AffiliateBookStats = {
+	clicks: number;
+	uniqueClicks: number;
 	signups: number;
 	ftds: number;
 	bets: number;
@@ -299,17 +301,32 @@ export type AffiliatePayout = {
 	createdAt: string;
 };
 
+export type AffiliateClick = {
+	id: string;
+	landingPath: string;
+	source: string;
+	createdAt: string;
+};
+
+export type AffiliateClickSeriesPoint = {
+	date: string;
+	clicks: number;
+	uniqueClicks: number;
+};
+
 export type AffiliatePartnerDetail = {
 	partner: AffiliatePartner;
 	stats: AffiliateBookStats;
 	players: AffiliatePlayer[];
+	clicks: AffiliateClick[];
+	clickSeries: AffiliateClickSeriesPoint[];
 	commissions: AffiliateCommission[];
 	payouts: AffiliatePayout[];
 };
 
 export type MarketingStats = {
 	partners: { total: number; active: number; invited: number; paused: number };
-	players: { signups: number; ftds: number };
+	players: { signups: number; ftds: number; clicks: number; uniqueClicks: number };
 	money: {
 		bookedCpa: number;
 		bookedRevShare: number;

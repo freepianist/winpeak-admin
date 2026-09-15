@@ -52,7 +52,9 @@ export async function GET(_request: Request, context: RouteContext) {
 			qualified: Boolean(player.firstDepositAt)
 		})),
 		commissions: commissions.map(serializeCommission),
-		payouts: payouts.map(serializePayout)
+		payouts: payouts.map(serializePayout),
+		clicks: book.clicks,
+		clickSeries: book.clickSeries
 	});
 }
 

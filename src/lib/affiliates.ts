@@ -126,6 +126,61 @@ export function serializePayout(row: {
 	};
 }
 
+export function serializeClick(row: {
+	id: string;
+	landingPath: string;
+	referrer: string;
+	createdAt: Date;
+}) {
+	return {
+		id: row.id,
+		landingPath: row.landingPath || '/',
+		source: row.referrer || 'Direct',
+		createdAt: row.createdAt.toISOString()
+	};
+}
+
+function lastUtcDays(count: number) {
+	const days: string[] = [];
+	const now = new Date();
+
+	for (let index = count - 1; index >= 0; index -= 1) {
+		const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - index));
+		days.push(day.toISOString().slice(0, 10));
+	}
+
+	return days;
+}
+
+async function getClickSeries(partnerId: string, days = 14) {
+	const since = new Date();
+	since.setUTCHours(0, 0, 0, 0);
+	since.setUTCDate(since.getUTCDate() - (days - 1));
+
+	const rows = await prisma
+		.$queryRaw<Array<{ day: string; clicks: number; uniqueClicks: number }>>`
+			SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day,
+			       COUNT(*)::int AS clicks,
+			       COUNT(DISTINCT "visitorKey")::int AS "uniqueClicks"
+			FROM "AffiliateClick"
+			WHERE "partnerId" = ${partnerId} AND "createdAt" >= ${since}
+			GROUP BY 1
+			ORDER BY 1
+		`
+		.catch((): Array<{ day: string; clicks: number; uniqueClicks: number }> => []);
+
+	const byDay = new Map(rows.map((row) => [String(row.day).slice(0, 10), row]));
+
+	return lastUtcDays(days).map((date) => {
+		const row = byDay.get(date);
+		return {
+			date,
+			clicks: Number(row?.clicks || 0),
+			uniqueClicks: Number(row?.uniqueClicks || 0)
+		};
+	});
+}
+
 export async function getPartnerBook(partnerId: string) {
 	const partner = await prisma.affiliatePartner.findUnique({ where: { id: partnerId } });
 
@@ -171,7 +226,7 @@ export async function getPartnerBook(partnerId: string) {
 	const estimatedRevShare =
 		partner.dealType === 'CPA' ? 0 : Number(((ggr * revSharePercent) / 100).toFixed(4));
 
-	const [commissionRows, payoutSum] = await Promise.all([
+	const [commissionRows, payoutSum, clickCount, uniqueClicks, recentClicks, clickSeries] = await Promise.all([
 		prisma.affiliateCommission.groupBy({
 			by: ['status', 'kind'],
 			where: { partnerId, status: { not: 'VOID' } },
@@ -180,7 +235,27 @@ export async function getPartnerBook(partnerId: string) {
 		prisma.affiliatePayout.aggregate({
 			where: { partnerId },
 			_sum: { amount: true }
-		})
+		}),
+		prisma.affiliateClick.count({ where: { partnerId } }).catch(() => 0),
+		prisma
+			.$queryRaw<Array<{ count: number }>>`
+				SELECT COUNT(DISTINCT "visitorKey")::int AS count
+				FROM "AffiliateClick"
+				WHERE "partnerId" = ${partnerId}
+			`
+			.then((rows) => rows[0]?.count || 0)
+			.catch(() => 0),
+		prisma.affiliateClick
+			.findMany({
+				where: { partnerId },
+				orderBy: { createdAt: 'desc' },
+				take: 100,
+				select: { id: true, landingPath: true, referrer: true, createdAt: true }
+			})
+			.catch(
+				(): Array<{ id: string; landingPath: string; referrer: string; createdAt: Date }> => []
+			),
+		getClickSeries(partnerId)
 	]);
 
 	let bookedCpa = 0;
@@ -202,7 +277,11 @@ export async function getPartnerBook(partnerId: string) {
 	return {
 		partner,
 		players,
+		clicks: recentClicks.map(serializeClick),
+		clickSeries,
 		stats: {
+			clicks: clickCount,
+			uniqueClicks,
 			signups: players.length,
 			ftds,
 			bets,

@@ -102,12 +102,17 @@ function MarketingDashboardView() {
 			}
 			content={
 				<div className="w-full px-4 pt-4 pb-8 md:px-8">
-					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 						<Card
 							label="Partners"
 							value={data.partners.total.toLocaleString()}
 							hint={`${data.partners.invited} awaiting approval · ${data.partners.active} active · ${data.partners.paused} paused`}
 							to="/apps/partners"
+						/>
+						<Card
+							label="Link clicks"
+							value={(data.players.clicks || 0).toLocaleString()}
+							hint={`${(data.players.uniqueClicks || 0).toLocaleString()} unique visitors`}
 						/>
 						<Card
 							label="Referred signups"
@@ -166,7 +171,7 @@ function MarketingDashboardView() {
 										</div>
 										<div className="text-right">
 											<Typography className="font-semibold">
-												{row.stats?.signups || 0} invited · {row.stats?.ftds || 0} qualified
+												{row.stats?.clicks || 0} clicks · {row.stats?.signups || 0} invited · {row.stats?.ftds || 0} qualified
 											</Typography>
 											<Typography
 												className="text-sm"

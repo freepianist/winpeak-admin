@@ -398,9 +398,24 @@ model AffiliatePartner {
   players         User[]
   commissions     AffiliateCommission[]
   payouts         AffiliatePayout[]
+  clicks          AffiliateClick[]
 
   @@index([status])
   @@index([code])
+}
+
+/// A visit to the public site with this partner's ?ref= tracking code.
+model AffiliateClick {
+  id          String           @id @default(cuid())
+  partnerId   String
+  partner     AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  visitorKey  String
+  landingPath String
+  referrer    String           @default("")
+  createdAt   DateTime         @default(now())
+
+  @@index([partnerId, createdAt(sort: Desc)])
+  @@index([partnerId, visitorKey])
 }
 
 model AffiliateCommission {

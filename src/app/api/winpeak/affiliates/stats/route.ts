@@ -10,20 +10,28 @@ export async function GET() {
 		return unauthorized();
 	}
 
-	const [partners, pendingInvites, referredPlayers, ftds, commissions, payouts] = await Promise.all([
-		prisma.affiliatePartner.findMany({ orderBy: { createdAt: 'desc' } }),
-		prisma.affiliatePartner.count({ where: { status: 'INVITED' } }),
-		prisma.user.count({ where: { referredByAffiliateId: { not: null } } }),
-		prisma.user.count({
-			where: { referredByAffiliateId: { not: null }, firstDepositAt: { not: null } }
-		}),
-		prisma.affiliateCommission.groupBy({
-			by: ['status', 'kind'],
-			where: { status: { not: 'VOID' } },
-			_sum: { amount: true }
-		}),
-		prisma.affiliatePayout.aggregate({ _sum: { amount: true } })
-	]);
+	const [partners, pendingInvites, referredPlayers, ftds, commissions, payouts, clickTotals] =
+		await Promise.all([
+			prisma.affiliatePartner.findMany({ orderBy: { createdAt: 'desc' } }),
+			prisma.affiliatePartner.count({ where: { status: 'INVITED' } }),
+			prisma.user.count({ where: { referredByAffiliateId: { not: null } } }),
+			prisma.user.count({
+				where: { referredByAffiliateId: { not: null }, firstDepositAt: { not: null } }
+			}),
+			prisma.affiliateCommission.groupBy({
+				by: ['status', 'kind'],
+				where: { status: { not: 'VOID' } },
+				_sum: { amount: true }
+			}),
+			prisma.affiliatePayout.aggregate({ _sum: { amount: true } }),
+			prisma
+				.$queryRaw<Array<{ clicks: number; uniqueClicks: number }>>`
+					SELECT COUNT(*)::int AS clicks, COUNT(DISTINCT "visitorKey")::int AS "uniqueClicks"
+					FROM "AffiliateClick"
+				`
+				.then((rows) => rows[0] || { clicks: 0, uniqueClicks: 0 })
+				.catch(() => ({ clicks: 0, uniqueClicks: 0 }))
+		]);
 
 	let bookedCpa = 0;
 	let bookedRevShare = 0;
@@ -66,7 +74,9 @@ export async function GET() {
 		},
 		players: {
 			signups: referredPlayers,
-			ftds
+			ftds,
+			clicks: clickTotals.clicks,
+			uniqueClicks: clickTotals.uniqueClicks
 		},
 		money: {
 			bookedCpa,
