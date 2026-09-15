@@ -40,6 +40,8 @@ export async function GET() {
 			qualified: Boolean(player.firstDepositAt)
 		})),
 		commissions: commissions.map((row) => serializeCommission({ ...row, maskPlayer: true })),
-		payouts: payouts.map(serializePayout)
+		payouts: payouts.map(serializePayout),
+		clicks: book.clicks,
+		clickSeries: book.clickSeries
 	});
 }

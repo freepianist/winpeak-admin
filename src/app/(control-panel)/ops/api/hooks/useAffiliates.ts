@@ -126,7 +126,9 @@ export const useUpdatePayout = () => {
 export const useMyAffiliate = () => {
 	return useQuery({
 		queryFn: winpeakApi.getMyAffiliate,
-		queryKey: myAffiliateQueryKey
+		queryKey: myAffiliateQueryKey,
+		staleTime: 0,
+		refetchOnMount: 'always'
 	});
 };
 

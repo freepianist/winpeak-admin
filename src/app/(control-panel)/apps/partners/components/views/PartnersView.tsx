@@ -115,6 +115,16 @@ function PartnersView() {
 				accessorFn: (row) => row.stats?.signups || 0
 			},
 			{
+				id: 'clicks',
+				header: 'Clicks',
+				accessorFn: (row) => row.stats?.clicks || 0,
+				Cell: ({ row }) => {
+					const clicks = row.original.stats?.clicks || 0;
+					const unique = row.original.stats?.uniqueClicks || 0;
+					return unique && unique !== clicks ? `${clicks} · ${unique} unique` : String(clicks);
+				}
+			},
+			{
 				id: 'ftds',
 				header: 'Qualified',
 				accessorFn: (row) => row.stats?.ftds || 0

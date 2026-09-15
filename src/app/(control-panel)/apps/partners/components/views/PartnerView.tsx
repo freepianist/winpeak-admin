@@ -225,6 +225,8 @@ function PartnerView() {
 					<Paper className="flex flex-col gap-3 rounded-xl p-6 shadow-sm">
 						<Typography className="text-lg font-semibold">Book</Typography>
 						{[
+							['Link clicks', String(stats.clicks || 0)],
+							['Unique visitors', String(stats.uniqueClicks || 0)],
 							['Invited players', String(stats.signups)],
 							['Qualified (FTD)', String(stats.ftds)],
 							['Expected income', formatMoney((stats.bookedCpa || 0) + (stats.estimatedRevShare || 0))],
@@ -242,6 +244,33 @@ function PartnerView() {
 								<Typography className="font-semibold">{value}</Typography>
 							</div>
 						))}
+					</Paper>
+
+					<Paper className="rounded-xl p-6 shadow-sm xl:col-span-3">
+						<Typography className="mb-4 text-lg font-semibold">Referral link clicks</Typography>
+						{(data.clicks || []).length === 0 && (
+							<Typography color="text.secondary">No tracked visits yet.</Typography>
+						)}
+						<div className="flex flex-col gap-3">
+							{(data.clicks || []).slice(0, 12).map((row) => (
+								<div
+									key={row.id}
+									className="flex items-center justify-between gap-3"
+								>
+									<div>
+										<Typography className="font-medium">
+											{!row.landingPath || row.landingPath === '/' ? 'Home' : row.landingPath}
+										</Typography>
+										<Typography
+											className="text-sm"
+											color="text.secondary"
+										>
+											{row.source} · {format(new Date(row.createdAt), 'MMM d, yyyy h:mm a')}
+										</Typography>
+									</div>
+								</div>
+							))}
+						</div>
 					</Paper>
 
 					<Paper className="rounded-xl p-6 shadow-sm xl:col-span-3">

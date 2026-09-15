@@ -221,6 +221,13 @@ const navigationConfig: FuseNavItemType[] = [
 				url: '/apps/partner/players'
 			},
 			{
+				id: 'apps.partner.traffic',
+				title: 'My traffic',
+				type: 'item',
+				icon: 'lucide:mouse-pointer-click',
+				url: '/apps/partner/traffic'
+			},
+			{
 				id: 'apps.partner.earnings',
 				title: 'My earnings',
 				type: 'item',

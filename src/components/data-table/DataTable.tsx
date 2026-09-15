@@ -42,6 +42,9 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 						right: isMobile ? [] : ['mrt-row-actions']
 					},
 					pagination: {
+						// MRT takes initialState.pagination as-is, so pageIndex must be set
+						// or the row model slices with NaN and renders no rows.
+						pageIndex: 0,
 						pageSize: 15
 					},
 					enableFullScreenToggle: false
@@ -54,6 +57,7 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 				enableFacetedValues: true,
 				enableRowActions: true,
 				enableRowSelection: true,
+				autoResetPageIndex: false,
 				muiBottomToolbarProps: {
 					className: 'flex items-center min-h-14 h-14 px-4'
 				},
@@ -187,7 +191,7 @@ function DataTable<TData>(props: MaterialReactTableProps<TData>) {
 	const tableOptions = useMemo(
 		() => ({
 			columns,
-			data,
+			data: Array.isArray(data) ? data : [],
 			...defaults,
 			...rest
 		}),
