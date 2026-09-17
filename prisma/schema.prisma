@@ -412,6 +412,14 @@ model AffiliateClick {
   visitorKey  String
   landingPath String
   referrer    String           @default("")
+  eventType   String           @default("")
+  tabId       String           @default("")
+  deviceType  String           @default("")
+  os          String           @default("")
+  browser     String           @default("")
+  country     String           @default("")
+  region      String           @default("")
+  city        String           @default("")
   createdAt   DateTime         @default(now())
 
   @@index([partnerId, createdAt(sort: Desc)])

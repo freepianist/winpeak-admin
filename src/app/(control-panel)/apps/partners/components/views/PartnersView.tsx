@@ -121,7 +121,23 @@ function PartnersView() {
 				Cell: ({ row }) => {
 					const clicks = row.original.stats?.clicks || 0;
 					const unique = row.original.stats?.uniqueClicks || 0;
-					return unique && unique !== clicks ? `${clicks} · ${unique} unique` : String(clicks);
+					const refresh = row.original.stats?.refreshClicks || 0;
+					const repeat = row.original.stats?.repeatClicks ?? Math.max(0, clicks - unique - refresh);
+					const parts = [String(clicks)];
+
+					if (unique && unique !== clicks) {
+						parts.push(`${unique} unique`);
+					}
+
+					if (repeat) {
+						parts.push(`${repeat} repeat`);
+					}
+
+					if (refresh) {
+						parts.push(`${refresh} refresh`);
+					}
+
+					return parts.join(' · ');
 				}
 			},
 			{

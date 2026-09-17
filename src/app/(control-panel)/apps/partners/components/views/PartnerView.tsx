@@ -20,6 +20,7 @@ import { useBookRevShare, usePartner, useUpdatePartner } from '@/app/(control-pa
 import type { AffiliateDealType, AffiliateStatus } from '@/app/(control-panel)/ops/api/types';
 import { statusLabel } from '@/lib/status-label';
 import { formatMoney } from '@/lib/money';
+import { deviceLabel, locationLabel, visitTypeColor, visitTypeLabel, visitTypeOf } from '@/lib/affiliate-traffic';
 
 function PartnerView() {
 	const { partnerId } = useParams() as { partnerId: string };
@@ -227,6 +228,17 @@ function PartnerView() {
 						{[
 							['Link clicks', String(stats.clicks || 0)],
 							['Unique visitors', String(stats.uniqueClicks || 0)],
+							[
+								'Repeat visits',
+								String(
+									stats.repeatClicks ??
+										Math.max(
+											0,
+											(stats.clicks || 0) - (stats.uniqueClicks || 0) - (stats.refreshClicks || 0)
+										)
+								)
+							],
+							['Refreshes', String(stats.refreshClicks || 0)],
 							['Invited players', String(stats.signups)],
 							['Qualified (FTD)', String(stats.ftds)],
 							['Expected income', formatMoney((stats.bookedCpa || 0) + (stats.estimatedRevShare || 0))],
@@ -252,24 +264,44 @@ function PartnerView() {
 							<Typography color="text.secondary">No tracked visits yet.</Typography>
 						)}
 						<div className="flex flex-col gap-3">
-							{(data.clicks || []).slice(0, 12).map((row) => (
-								<div
-									key={row.id}
-									className="flex items-center justify-between gap-3"
-								>
-									<div>
-										<Typography className="font-medium">
-											{!row.landingPath || row.landingPath === '/' ? 'Home' : row.landingPath}
-										</Typography>
-										<Typography
-											className="text-sm"
-											color="text.secondary"
-										>
-											{row.source} · {format(new Date(row.createdAt), 'MMM d, yyyy h:mm a')}
-										</Typography>
+							{(data.clicks || []).slice(0, 12).map((row) => {
+								const visitType = visitTypeOf(row);
+								return (
+									<div
+										key={row.id}
+										className="flex items-center justify-between gap-3"
+									>
+										<div>
+											<Typography className="font-medium">
+												{!row.landingPath || row.landingPath === '/' ? 'Home' : row.landingPath}
+											</Typography>
+											<Typography
+												className="text-sm"
+												color="text.secondary"
+											>
+												{[
+													row.source,
+													deviceLabel(row),
+													locationLabel(row),
+													row.visitorLabel,
+													visitType !== 'unique' && row.visitNumber
+														? `visit ${row.visitNumber}${row.visitorVisits ? ` of ${row.visitorVisits}` : ''}`
+														: '',
+													format(new Date(row.createdAt), 'MMM d, yyyy h:mm a')
+												]
+													.filter((part) => part && part !== '—')
+													.join(' · ')}
+											</Typography>
+										</div>
+										<Chip
+											size="small"
+											variant="outlined"
+											color={visitTypeColor(visitType)}
+											label={visitTypeLabel(visitType)}
+										/>
 									</div>
-								</div>
-							))}
+								);
+							})}
 						</div>
 					</Paper>
 

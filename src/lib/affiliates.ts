@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
+import type { AffiliateVisitType } from '@/app/(control-panel)/ops/api/types';
 
 export function trackingLink(code: string) {
 	const origin = (process.env.WINPEAK_SITE_URL || process.env.NEXT_PUBLIC_WINPEAK_SITE_URL || '').replace(/\/$/, '');
@@ -126,18 +127,132 @@ export function serializePayout(row: {
 	};
 }
 
-export function serializeClick(row: {
+function visitorLabel(visitorKey: string) {
+	const compact = visitorKey.replace(/-/g, '').slice(0, 8).toUpperCase();
+	return compact ? `V-${compact}` : 'Unknown';
+}
+
+function isoDate(value: Date | string) {
+	return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+type ClickRecord = {
 	id: string;
 	landingPath: string;
 	referrer: string;
-	createdAt: Date;
-}) {
+	createdAt: Date | string;
+	visitorKey?: string | null;
+	visitNumber?: number | bigint | null;
+	visitorVisits?: number | bigint | null;
+	eventType?: string | null;
+	deviceType?: string | null;
+	os?: string | null;
+	browser?: string | null;
+	country?: string | null;
+	region?: string | null;
+	city?: string | null;
+};
+
+const VISIT_TYPES = new Set(['unique', 'repeat', 'refresh', 'new_tab', 'same_tab', 'back']);
+
+function visitTypeOf(eventType: string | null | undefined, visitNumber: number): AffiliateVisitType {
+	if (eventType === 'first' || !eventType) {
+		return visitNumber > 1 ? 'repeat' : 'unique';
+	}
+
+	if (VISIT_TYPES.has(eventType)) {
+		return eventType as AffiliateVisitType;
+	}
+
+	return visitNumber > 1 ? 'repeat' : 'unique';
+}
+
+export function serializeClick(row: ClickRecord) {
+	const visitNumber = Math.max(1, Number(row.visitNumber || 1));
+	const visitorVisits = Math.max(visitNumber, Number(row.visitorVisits || visitNumber));
+
 	return {
 		id: row.id,
 		landingPath: row.landingPath || '/',
 		source: row.referrer || 'Direct',
-		createdAt: row.createdAt.toISOString()
+		createdAt: isoDate(row.createdAt),
+		visitType: visitTypeOf(row.eventType, visitNumber),
+		visitNumber,
+		visitorVisits,
+		visitorLabel: visitorLabel(row.visitorKey || ''),
+		deviceType: row.deviceType || '',
+		os: row.os || '',
+		browser: row.browser || '',
+		country: row.country || '',
+		region: row.region || '',
+		city: row.city || ''
 	};
+}
+
+async function getRecentClicks(partnerId: string) {
+	const rows = await prisma
+		.$queryRaw<ClickRecord[]>`
+			WITH recent AS (
+				SELECT
+					id,
+					"visitorKey",
+					"landingPath",
+					referrer,
+					"createdAt",
+					"eventType",
+					"deviceType",
+					os,
+					browser,
+					country,
+					region,
+					city
+				FROM "AffiliateClick"
+				WHERE "partnerId" = ${partnerId}
+				ORDER BY "createdAt" DESC
+				LIMIT 100
+			),
+			scoped AS (
+				SELECT
+					id,
+					"visitorKey",
+					"landingPath",
+					referrer,
+					"createdAt",
+					"eventType",
+					"deviceType",
+					os,
+					browser,
+					country,
+					region,
+					city,
+					ROW_NUMBER() OVER (PARTITION BY "visitorKey" ORDER BY "createdAt" ASC, id ASC) AS "visitNumber",
+					COUNT(*) OVER (PARTITION BY "visitorKey") AS "visitorVisits"
+				FROM "AffiliateClick"
+				WHERE "partnerId" = ${partnerId}
+				  AND "visitorKey" IN (SELECT "visitorKey" FROM recent)
+			)
+			SELECT
+				s.id,
+				s."landingPath",
+				s.referrer,
+				s."createdAt",
+				s."visitorKey",
+				s."eventType",
+				s."deviceType",
+				s.os,
+				s.browser,
+				s.country,
+				s.region,
+				s.city,
+				s."visitNumber"::int AS "visitNumber",
+				s."visitorVisits"::int AS "visitorVisits"
+			FROM scoped s
+			INNER JOIN recent r ON r.id = s.id
+			ORDER BY s."createdAt" DESC
+		`
+		.catch((): ClickRecord[] => []);
+
+	return rows.map(serializeClick);
 }
 
 function lastUtcDays(count: number) {
@@ -158,7 +273,7 @@ async function getClickSeries(partnerId: string, days = 14) {
 	since.setUTCDate(since.getUTCDate() - (days - 1));
 
 	const rows = await prisma
-		.$queryRaw<Array<{ day: string; clicks: number; uniqueClicks: number }>>`
+		.$queryRaw<{ day: string; clicks: number; uniqueClicks: number }[]>`
 			SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day,
 			       COUNT(*)::int AS clicks,
 			       COUNT(DISTINCT "visitorKey")::int AS "uniqueClicks"
@@ -167,7 +282,7 @@ async function getClickSeries(partnerId: string, days = 14) {
 			GROUP BY 1
 			ORDER BY 1
 		`
-		.catch((): Array<{ day: string; clicks: number; uniqueClicks: number }> => []);
+		.catch((): { day: string; clicks: number; uniqueClicks: number }[] => []);
 
 	const byDay = new Map(rows.map((row) => [String(row.day).slice(0, 10), row]));
 
@@ -226,7 +341,7 @@ export async function getPartnerBook(partnerId: string) {
 	const estimatedRevShare =
 		partner.dealType === 'CPA' ? 0 : Number(((ggr * revSharePercent) / 100).toFixed(4));
 
-	const [commissionRows, payoutSum, clickCount, uniqueClicks, recentClicks, clickSeries] = await Promise.all([
+	const [commissionRows, payoutSum, clickTotals, clicks, clickSeries] = await Promise.all([
 		prisma.affiliateCommission.groupBy({
 			by: ['status', 'kind'],
 			where: { partnerId, status: { not: 'VOID' } },
@@ -236,25 +351,18 @@ export async function getPartnerBook(partnerId: string) {
 			where: { partnerId },
 			_sum: { amount: true }
 		}),
-		prisma.affiliateClick.count({ where: { partnerId } }).catch(() => 0),
 		prisma
-			.$queryRaw<Array<{ count: number }>>`
-				SELECT COUNT(DISTINCT "visitorKey")::int AS count
+			.$queryRaw<{ clicks: number; uniqueClicks: number; refreshClicks: number }[]>`
+				SELECT
+					COUNT(*)::int AS clicks,
+					COUNT(DISTINCT "visitorKey")::int AS "uniqueClicks",
+					COUNT(*) FILTER (WHERE "eventType" = 'refresh')::int AS "refreshClicks"
 				FROM "AffiliateClick"
 				WHERE "partnerId" = ${partnerId}
 			`
-			.then((rows) => rows[0]?.count || 0)
-			.catch(() => 0),
-		prisma.affiliateClick
-			.findMany({
-				where: { partnerId },
-				orderBy: { createdAt: 'desc' },
-				take: 100,
-				select: { id: true, landingPath: true, referrer: true, createdAt: true }
-			})
-			.catch(
-				(): Array<{ id: string; landingPath: string; referrer: string; createdAt: Date }> => []
-			),
+			.then((rows) => rows[0] || { clicks: 0, uniqueClicks: 0, refreshClicks: 0 })
+			.catch(() => ({ clicks: 0, uniqueClicks: 0, refreshClicks: 0 })),
+		getRecentClicks(partnerId),
 		getClickSeries(partnerId)
 	]);
 
@@ -274,14 +382,22 @@ export async function getPartnerBook(partnerId: string) {
 		if (row.status === 'PAID') paid += amount;
 	}
 
+	const clickCount = Number(clickTotals.clicks || 0);
+
+	const uniqueClicks = Number(clickTotals.uniqueClicks || 0);
+
+	const refreshClicks = Number(clickTotals.refreshClicks || 0);
+
 	return {
 		partner,
 		players,
-		clicks: recentClicks.map(serializeClick),
+		clicks,
 		clickSeries,
 		stats: {
 			clicks: clickCount,
 			uniqueClicks,
+			refreshClicks,
+			repeatClicks: Math.max(0, clickCount - uniqueClicks - refreshClicks),
 			signups: players.length,
 			ftds,
 			bets,
