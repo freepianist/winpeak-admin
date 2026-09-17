@@ -229,6 +229,8 @@ export type PayoutStatus = 'PENDING' | 'SENT';
 export type AffiliateBookStats = {
 	clicks: number;
 	uniqueClicks: number;
+	repeatClicks: number;
+	refreshClicks: number;
 	signups: number;
 	ftds: number;
 	bets: number;
@@ -301,11 +303,23 @@ export type AffiliatePayout = {
 	createdAt: string;
 };
 
+export type AffiliateVisitType = 'unique' | 'repeat' | 'refresh' | 'new_tab' | 'same_tab' | 'back';
+
 export type AffiliateClick = {
 	id: string;
 	landingPath: string;
 	source: string;
 	createdAt: string;
+	visitType: AffiliateVisitType;
+	visitNumber: number;
+	visitorVisits: number;
+	visitorLabel: string;
+	deviceType: string;
+	os: string;
+	browser: string;
+	country: string;
+	region: string;
+	city: string;
 };
 
 export type AffiliateClickSeriesPoint = {

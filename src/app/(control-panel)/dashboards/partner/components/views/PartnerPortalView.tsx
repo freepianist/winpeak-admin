@@ -26,6 +26,7 @@ import type {
 	AffiliatePlayer
 } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
+import { deviceLabel, locationLabel, visitTypeColor, visitTypeLabel, visitTypeOf } from '@/lib/affiliate-traffic';
 
 const container = {
 	show: { transition: { staggerChildren: 0.06 } }
@@ -410,7 +411,7 @@ function ClicksWidget({ clicks }: { clicks: AffiliateClick[] }) {
 						className="mt-1 text-sm"
 						color="text.secondary"
 					>
-						People opening your referral link
+						Unique, refresh, extra tabs, and returning visitors
 					</Typography>
 				</div>
 				<Button
@@ -425,18 +426,37 @@ function ClicksWidget({ clicks }: { clicks: AffiliateClick[] }) {
 			<div className="flex flex-auto flex-col px-3 pb-4">
 				{clicks.map((row) => {
 					const when = new Date(row.createdAt);
+					const visitType = visitTypeOf(row);
 					return (
 						<div
 							key={row.id}
 							className="hover:bg-action-hover flex items-start justify-between gap-3 rounded-xl px-3 py-3"
 						>
 							<div className="min-w-0">
-								<Typography className="font-medium">{landingLabel(row.landingPath)}</Typography>
+								<div className="flex items-center gap-2">
+									<Typography className="font-medium">{landingLabel(row.landingPath)}</Typography>
+									<Chip
+										size="small"
+										variant="outlined"
+										color={visitTypeColor(visitType)}
+										label={visitTypeLabel(visitType)}
+									/>
+								</div>
 								<Typography
 									className="truncate text-sm"
 									color="text.secondary"
 								>
-									{row.source}
+									{[
+										row.source,
+										deviceLabel(row),
+										locationLabel(row),
+										row.visitorLabel,
+										visitType !== 'unique' && row.visitNumber
+											? `visit ${row.visitNumber}${row.visitorVisits ? ` of ${row.visitorVisits}` : ''}`
+											: ''
+									]
+										.filter((part) => part && part !== '—')
+										.join(' · ')}
 								</Typography>
 							</div>
 							<Typography
@@ -624,6 +644,8 @@ function PartnerPortalView() {
 	const deal = dealCopy(data);
 	const clicks = data.stats.clicks || 0;
 	const uniqueClicks = data.stats.uniqueClicks || 0;
+	const refreshClicks = data.stats.refreshClicks || 0;
+	const repeatClicks = data.stats.repeatClicks ?? Math.max(0, clicks - uniqueClicks - refreshClicks);
 	const recentClicks = data.clicks || [];
 	const clickSeries = data.clickSeries || [];
 	const name = firstName(data.partner.name);
@@ -701,9 +723,9 @@ function PartnerPortalView() {
 							<SummaryCard
 								title="Link clicks"
 								value={clicks.toLocaleString()}
-								unit="Total visits"
-								footer="Unique visitors:"
-								footerValue={uniqueClicks.toLocaleString()}
+								unit="All hits"
+								footer="Unique / repeat / refresh:"
+								footerValue={`${uniqueClicks.toLocaleString()} / ${repeatClicks.toLocaleString()} / ${refreshClicks.toLocaleString()}`}
 								to="/apps/partner/traffic"
 							/>
 						</motion.div>
