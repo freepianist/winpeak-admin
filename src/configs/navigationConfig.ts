@@ -127,24 +127,34 @@ const navigationConfig: FuseNavItemType[] = [
 	{
 		id: 'communications',
 		title: 'Communications',
-		subtitle: 'Inbox and mailing list',
+		subtitle: 'Live chat, inbox and mailing list',
 		type: 'group',
 		icon: 'lucide:mail',
-		auth: ['admin'],
+		auth: ['admin', 'support_agent'],
 		children: [
+			{
+				id: 'apps.support',
+				title: 'Live chat',
+				type: 'item',
+				icon: 'lucide:message-circle',
+				url: '/apps/support',
+				auth: ['admin', 'support_agent']
+			},
 			{
 				id: 'apps.inbox',
 				title: 'Inbox',
 				type: 'item',
 				icon: 'lucide:inbox',
-				url: '/apps/inbox'
+				url: '/apps/inbox',
+				auth: ['admin']
 			},
 			{
 				id: 'apps.subscribers',
 				title: 'Subscribers',
 				type: 'item',
 				icon: 'lucide:mail-plus',
-				url: '/apps/subscribers'
+				url: '/apps/subscribers',
+				auth: ['admin']
 			}
 		]
 	},

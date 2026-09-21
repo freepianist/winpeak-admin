@@ -8,6 +8,7 @@ import useUser from '@auth/useUser';
 
 const PARTNER_PREFIXES = ['/dashboards/partner', '/apps/partner'];
 const MARKETING_PREFIXES = ['/dashboards/marketing', '/apps/partners', '/apps/commissions', '/apps/payouts'];
+const SUPPORT_PREFIXES = ['/apps/support'];
 
 function matchesPrefix(pathname: string, prefixes: string[]) {
 	return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -21,10 +22,12 @@ function AffiliateRouteGate({ children }: { children: ReactNode }) {
 	const isAffiliateOnly = roles.includes('affiliate') && !roles.includes('admin');
 	const isManagerOnly =
 		roles.includes('affiliate_manager') && !roles.includes('admin') && !roles.includes('affiliate');
-	const home = isAffiliateOnly ? '/dashboards/partner' : '/dashboards/marketing';
+	const isSupportOnly = roles.includes('support_agent') && !roles.includes('admin');
+	const home = isAffiliateOnly ? '/dashboards/partner' : isSupportOnly ? '/apps/support' : '/dashboards/marketing';
 	const blocked =
 		(isAffiliateOnly && !matchesPrefix(pathname, PARTNER_PREFIXES)) ||
-		(isManagerOnly && !matchesPrefix(pathname, MARKETING_PREFIXES));
+		(isManagerOnly && !matchesPrefix(pathname, MARKETING_PREFIXES)) ||
+		(isSupportOnly && !matchesPrefix(pathname, SUPPORT_PREFIXES));
 
 	useEffect(() => {
 		if (blocked) {

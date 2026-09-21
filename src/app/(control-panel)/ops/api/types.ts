@@ -201,7 +201,12 @@ export type DashboardStats = {
 		ggr: number;
 		counts: { deposits: number; withdrawals: number; bets: number; wins: number };
 	};
-	queues?: { pendingDeposits: number; pendingWithdrawals: number };
+	queues?: {
+		pendingDeposits: number;
+		pendingWithdrawals: number;
+		waitingSupportChats?: number;
+		openSupportChats?: number;
+	};
 	content: {
 		posts: number;
 		comments: number;
@@ -464,3 +469,49 @@ export type PaymentSettingsInput = {
 	manualMinWithdraw: number;
 	wallets: Omit<ManualWallet, 'label' | 'updatedAt'>[];
 };
+
+export type SupportStatus = 'BOT' | 'WAITING_AGENT' | 'AGENT' | 'RESOLVED';
+export type SupportAuthor = 'VISITOR' | 'BOT' | 'AGENT' | 'SYSTEM';
+
+export type SupportMessage = {
+	id: string;
+	author: SupportAuthor;
+	body: string;
+	authorName: string;
+	createdAt: string;
+};
+
+export type SupportConversation = {
+	id: string;
+	userId: string | null;
+	email: string;
+	name: string;
+	isGuest: boolean;
+	status: SupportStatus;
+	assignedStaffId: string | null;
+	assignedStaffName: string;
+	/** Why the bot or the visitor escalated, shown to the agent before they open the thread. */
+	handoffReason: string;
+	lastMessageAt: string;
+	unreadForAgent: number;
+	createdAt: string;
+	preview?: string;
+	previewAuthor?: SupportAuthor | null;
+};
+
+export type SupportConversationDetail = SupportConversation & {
+	player: {
+		id: string;
+		email: string;
+		name: string;
+		status: string;
+		emailVerified: boolean;
+		createdAt: string;
+	} | null;
+	messages: SupportMessage[];
+};
+
+export type SupportAction = 'claim' | 'release' | 'resolve' | 'reopen';
+
+/** Totals per status, plus `OPEN` for the default queue of waiting and claimed threads. */
+export type SupportCounts = Record<SupportStatus, number> & { OPEN: number };

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 
 function rolesOf(role: string[] | string | null | undefined) {
 	if (!role) return [];
+
 	return Array.isArray(role) ? role : [role];
 }
 
@@ -22,6 +23,17 @@ export async function requireMarketing() {
 	const roles = rolesOf(session?.db?.role);
 
 	if (!session?.db || (!roles.includes('admin') && !roles.includes('affiliate_manager'))) {
+		return null;
+	}
+
+	return session;
+}
+
+export async function requireSupport() {
+	const session = await auth();
+	const roles = rolesOf(session?.db?.role);
+
+	if (!session?.db || (!roles.includes('admin') && !roles.includes('support_agent'))) {
 		return null;
 	}
 

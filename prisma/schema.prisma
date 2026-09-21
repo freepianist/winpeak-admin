@@ -107,6 +107,23 @@ enum AuthTokenType {
   RESET_PASSWORD
 }
 
+/// Where a support conversation sits between the bot and the agent desk.
+/// `BOT` means the AI answers every visitor message; once a conversation reaches
+/// `WAITING_AGENT` the bot goes quiet for good and staff own the thread.
+enum SupportStatus {
+  BOT
+  WAITING_AGENT
+  AGENT
+  RESOLVED
+}
+
+enum SupportAuthor {
+  VISITOR
+  BOT
+  AGENT
+  SYSTEM
+}
+
 model AuthToken {
   id        String        @id @default(cuid())
   userId    String
@@ -123,6 +140,7 @@ model AuthToken {
 
 enum StaffRole {
   AFFILIATE_MANAGER
+  SUPPORT_AGENT
 }
 
 enum StaffStatus {
@@ -179,6 +197,7 @@ model User {
   cashbackPayouts       CashbackPayout[]
   referralRewardsGiven  ReferralReward[]       @relation("ReferralRewardsGiven")
   referralRewardReceived ReferralReward?       @relation("ReferralRewardReceived")
+  supportConversations  SupportConversation[]
 
   @@index([createdAt])
   @@index([status])
@@ -379,6 +398,47 @@ model NewsletterSubscriber {
   id        String   @id @default(cuid())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+/// One live chat thread. `userId` is null for visitors who have not signed in;
+/// they are held by `guestKey` instead, which the signed support cookie carries so
+/// a transcript cannot be read by guessing an id. Both ends poll this table, so
+/// `lastMessageAt` is maintained on every write to keep the queue ordered without
+/// joining the messages.
+model SupportConversation {
+  id                String           @id @default(cuid())
+  userId            String?
+  user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestKey          String?
+  email             String           @default("")
+  name              String           @default("")
+  status            SupportStatus    @default(BOT)
+  assignedStaffId   String?
+  assignedStaffName String           @default("")
+  handoffReason     String           @default("")
+  lastMessageAt     DateTime         @default(now())
+  unreadForAgent    Int              @default(0)
+  unreadForVisitor  Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  messages          SupportMessage[]
+
+  @@index([status, lastMessageAt(sort: Desc)])
+  @@index([userId])
+  @@index([guestKey])
+}
+
+model SupportMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         SupportAuthor
+  body           String              @db.Text
+  authorName     String              @default("")
+  staffId        String?
+  createdAt      DateTime            @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 model AffiliatePartner {

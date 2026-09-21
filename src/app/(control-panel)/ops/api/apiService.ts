@@ -25,7 +25,12 @@ import type {
 	CashbackRunResult,
 	BlockedCountry,
 	PaymentSettings,
-	PaymentSettingsInput
+	PaymentSettingsInput,
+	SupportAction,
+	SupportConversation,
+	SupportConversationDetail,
+	SupportCounts,
+	SupportMessage
 } from './types';
 
 async function unwrap<T>(request: Promise<T>) {
@@ -51,8 +56,11 @@ export const winpeakApi = {
 		unwrap(api.post(`winpeak/users/${id}/password`, { json: { password } }).json<{ success: boolean }>()),
 	getWalletRequests: (params?: { status?: string; userId?: string }) => {
 		const search = new URLSearchParams();
+
 		if (params?.status) search.set('status', params.status);
+
 		if (params?.userId) search.set('userId', params.userId);
+
 		const suffix = search.toString() ? `?${search.toString()}` : '';
 		return unwrap(api.get(`winpeak/wallet-requests${suffix}`).json<WalletRequest[]>());
 	},
@@ -60,12 +68,14 @@ export const winpeakApi = {
 		id: string,
 		data: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string; creditedAmount?: number }
 	) => unwrap(api.patch(`winpeak/wallet-requests/${id}`, { json: data }).json<WalletRequest>()),
-	syncWalletRequest: (id: string) =>
-		unwrap(api.post(`winpeak/wallet-requests/${id}/sync`).json<WalletRequestSync>()),
+	syncWalletRequest: (id: string) => unwrap(api.post(`winpeak/wallet-requests/${id}/sync`).json<WalletRequestSync>()),
 	getLedger: (params?: { kind?: string; userId?: string }) => {
 		const search = new URLSearchParams();
+
 		if (params?.kind) search.set('kind', params.kind);
+
 		if (params?.userId) search.set('userId', params.userId);
+
 		const suffix = search.toString() ? `?${search.toString()}` : '';
 		return unwrap(api.get(`winpeak/ledger${suffix}`).json<LedgerItem[]>());
 	},
@@ -110,8 +120,7 @@ export const winpeakApi = {
 		unwrap(api.post('winpeak/affiliates', { json: data }).json<AffiliatePartner>()),
 	updatePartner: (id: string, data: Partial<AffiliatePartner> & { password?: string }) =>
 		unwrap(api.patch(`winpeak/affiliates/${id}`, { json: data }).json<AffiliatePartner>()),
-	bookRevShare: (id: string) =>
-		unwrap(api.post(`winpeak/affiliates/${id}/revshare`).json<AffiliateCommission>()),
+	bookRevShare: (id: string) => unwrap(api.post(`winpeak/affiliates/${id}/revshare`).json<AffiliateCommission>()),
 	getCommissions: () => unwrap(api.get('winpeak/affiliates/commissions').json<AffiliateCommission[]>()),
 	updateCommission: (id: string, status: string) =>
 		unwrap(api.patch(`winpeak/affiliates/commissions/${id}`, { json: { status } }).json<AffiliateCommission>()),
@@ -120,10 +129,9 @@ export const winpeakApi = {
 		unwrap(api.post('winpeak/affiliates/payouts', { json: data }).json<AffiliatePayout>()),
 	updatePayout: (id: string, data: { status?: string; note?: string }) =>
 		unwrap(api.patch(`winpeak/affiliates/payouts/${id}`, { json: data }).json<AffiliatePayout>()),
-	getMyAffiliate: () =>
-		unwrap(api.get('winpeak/affiliates/me', { timeout: 60_000 }).json<AffiliatePartnerDetail>()),
+	getMyAffiliate: () => unwrap(api.get('winpeak/affiliates/me', { timeout: 60_000 }).json<AffiliatePartnerDetail>()),
 	getStaff: () => unwrap(api.get('winpeak/staff').json<StaffMember[]>()),
-	inviteStaff: (data: { name: string; email: string; password?: string }) =>
+	inviteStaff: (data: { name: string; email: string; password?: string; role?: string }) =>
 		unwrap(api.post('winpeak/staff', { json: data }).json<StaffMember>()),
 	updateStaff: (id: string, data: { name?: string; status?: string; password?: string }) =>
 		unwrap(api.patch(`winpeak/staff/${id}`, { json: data }).json<StaffMember>()),
@@ -131,8 +139,7 @@ export const winpeakApi = {
 	updatePromo: (data: Partial<PromoOffer> & { id: string }) =>
 		unwrap(api.patch('winpeak/promos', { json: data }).json<PromoOffer>()),
 	runCashback: () => unwrap(api.post('winpeak/promos/cashback').json<CashbackRunResult>()),
-	forfeitBonus: (id: string) =>
-		unwrap(api.post(`winpeak/promos/bonuses/${id}/forfeit`).json<PlayerBonus>()),
+	forfeitBonus: (id: string) => unwrap(api.post(`winpeak/promos/bonuses/${id}/forfeit`).json<PlayerBonus>()),
 	getBlockedCountries: () => unwrap(api.get('winpeak/blocked-countries').json<BlockedCountry[]>()),
 	addBlockedCountry: (data: { code: string; note?: string }) =>
 		unwrap(api.post('winpeak/blocked-countries', { json: data }).json<BlockedCountry>()),
@@ -140,5 +147,18 @@ export const winpeakApi = {
 		unwrap(api.delete(`winpeak/blocked-countries/${code}`).json<{ success: boolean; code: string }>()),
 	getPaymentSettings: () => unwrap(api.get('winpeak/payment-settings').json<PaymentSettings>()),
 	updatePaymentSettings: (data: PaymentSettingsInput) =>
-		unwrap(api.patch('winpeak/payment-settings', { json: data }).json<PaymentSettings>())
+		unwrap(api.patch('winpeak/payment-settings', { json: data }).json<PaymentSettings>()),
+	getSupportConversations: (status?: string) =>
+		unwrap(
+			api.get(`winpeak/support/conversations${status ? `?status=${status}` : ''}`).json<SupportConversation[]>()
+		),
+	getSupportCounts: () => unwrap(api.get('winpeak/support/counts').json<SupportCounts>()),
+	getSupportConversation: (id: string) =>
+		unwrap(api.get(`winpeak/support/conversations/${id}`).json<SupportConversationDetail>()),
+	sendSupportReply: (id: string, body: string) =>
+		unwrap(api.post(`winpeak/support/conversations/${id}/messages`, { json: { body } }).json<SupportMessage>()),
+	updateSupportConversation: (id: string, action: SupportAction) =>
+		unwrap(api.patch(`winpeak/support/conversations/${id}`, { json: { action } }).json<SupportConversation>()),
+	deleteSupportConversation: (id: string) =>
+		unwrap(api.delete(`winpeak/support/conversations/${id}`).json<{ success: boolean }>())
 };

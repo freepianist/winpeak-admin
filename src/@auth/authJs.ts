@@ -13,7 +13,14 @@ import { readEnv } from '@/lib/env';
 import { verifyAffiliatePassword } from '@/lib/affiliates';
 import type { User } from '@auth/user';
 
-const STAFF_ROLES = new Set(['admin', 'affiliate_manager', 'affiliate']);
+const STAFF_ROLES = new Set(['admin', 'affiliate_manager', 'affiliate', 'support_agent']);
+
+/// StaffAccount rows carry the database enum; sessions carry the lowercase role the
+/// Fuse permission checks and navigationConfig `auth` arrays are written against.
+const STAFF_ROLE_SESSION: Record<string, string> = {
+	AFFILIATE_MANAGER: 'affiliate_manager',
+	SUPPORT_AGENT: 'support_agent'
+};
 
 function secretsEqual(left: string, right: string) {
 	const a = Buffer.from(left);
@@ -67,7 +74,14 @@ export const providers: Provider[] = [
 			const adminEmail = readEnv('ADMIN_EMAIL')?.trim().toLowerCase();
 			const adminPassword = readEnv('ADMIN_PASSWORD')?.trim();
 
-			if (adminEmail && adminPassword && email && password && email === adminEmail && secretsEqual(password, adminPassword)) {
+			if (
+				adminEmail &&
+				adminPassword &&
+				email &&
+				password &&
+				email === adminEmail &&
+				secretsEqual(password, adminPassword)
+			) {
 				return {
 					email: adminEmail,
 					name: 'WinPeak Admin',
@@ -101,17 +115,18 @@ export const providers: Provider[] = [
 				const staff = await prisma.staffAccount.findUnique({
 					where: { email }
 				});
+				const staffRole = staff ? STAFF_ROLE_SESSION[staff.role] : undefined;
 
 				if (
 					staff?.passwordHash &&
 					staff.status === 'ACTIVE' &&
-					staff.role === 'AFFILIATE_MANAGER' &&
+					staffRole &&
 					(await verifyAffiliatePassword(password, staff.passwordHash))
 				) {
 					return {
 						email: staff.email,
 						name: staff.name,
-						role: 'affiliate_manager',
+						role: staffRole,
 						staffId: staff.id
 					};
 				}
@@ -165,6 +180,7 @@ const config = {
 	callbacks: {
 		authorized({ request, auth }) {
 			const path = request.nextUrl.pathname;
+
 			if (
 				path.startsWith('/sign-in') ||
 				path.startsWith('/sign-up') ||
@@ -174,6 +190,7 @@ const config = {
 			) {
 				return true;
 			}
+
 			return Boolean(auth);
 		},
 		jwt({ token, trigger, account, user }) {
@@ -197,9 +214,13 @@ const config = {
 					settings?: unknown;
 					shortcuts?: string[];
 				};
+
 				if (patch.name) token.name = patch.name;
+
 				if (patch.displayName) token.name = patch.displayName;
+
 				if (patch.settings) token.settings = patch.settings;
+
 				if (patch.shortcuts) token.shortcuts = patch.shortcuts;
 			}
 
@@ -231,6 +252,20 @@ const config = {
 				return session;
 			}
 
+			if (token.role === 'support_agent') {
+				session.db = {
+					id: String(token.staffId || token.email || 'support-agent'),
+					role: ['support_agent'],
+					displayName: String(token.name || 'Support agent'),
+					email: session.user.email,
+					photoURL: '',
+					shortcuts: shortcuts.length ? shortcuts : ['apps.support'],
+					settings,
+					loginRedirectUrl: '/apps/support'
+				};
+				return session;
+			}
+
 			if (token.role === 'affiliate_manager') {
 				session.db = {
 					id: String(token.staffId || token.email || 'affiliate-manager'),
@@ -252,9 +287,7 @@ const config = {
 					displayName: String(token.name || 'WinPeak Admin'),
 					email: session.user.email,
 					photoURL: '',
-					shortcuts: shortcuts.length
-						? shortcuts
-						: ['dashboards.winpeak', 'apps.players', 'apps.ledger'],
+					shortcuts: shortcuts.length ? shortcuts : ['dashboards.winpeak', 'apps.players', 'apps.ledger'],
 					settings,
 					loginRedirectUrl: '/dashboards/winpeak'
 				};

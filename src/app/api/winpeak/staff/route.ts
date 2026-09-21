@@ -47,7 +47,12 @@ export async function POST(request: Request) {
 		return unauthorized();
 	}
 
-	const body = (await request.json()) as { name?: string; email?: string; password?: string };
+	const body = (await request.json()) as {
+		name?: string;
+		email?: string;
+		password?: string;
+		role?: string;
+	};
 	const name = String(body.name || '').trim();
 	const email = String(body.email || '')
 		.trim()
@@ -62,10 +67,16 @@ export async function POST(request: Request) {
 		return badRequest('That email is reserved for the staff admin');
 	}
 
+	const role = String(body.role || 'AFFILIATE_MANAGER').toUpperCase();
+
+	if (role !== 'AFFILIATE_MANAGER' && role !== 'SUPPORT_AGENT') {
+		return badRequest('Role must be AFFILIATE_MANAGER or SUPPORT_AGENT');
+	}
+
 	const existing = await prisma.staffAccount.findUnique({ where: { email } });
 
 	if (existing) {
-		return badRequest('A manager with this email already exists');
+		return badRequest('A staff member with this email already exists');
 	}
 
 	const partner = await prisma.affiliatePartner.findUnique({ where: { email } });
@@ -85,7 +96,7 @@ export async function POST(request: Request) {
 			name,
 			email,
 			passwordHash: await hashAffiliatePassword(password),
-			role: 'AFFILIATE_MANAGER',
+			role,
 			status: 'ACTIVE'
 		}
 	});

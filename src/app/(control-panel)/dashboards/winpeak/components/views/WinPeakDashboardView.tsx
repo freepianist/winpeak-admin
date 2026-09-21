@@ -46,7 +46,9 @@ const KIND_LABEL: Record<string, string> = {
 
 function firstName(displayName?: string | null) {
 	const name = displayName?.trim();
+
 	if (!name) return 'there';
+
 	return name.split(/\s+/)[0];
 }
 
@@ -114,17 +116,7 @@ function SummaryCard({
 	);
 }
 
-function MiniStat({
-	label,
-	value,
-	hint,
-	large
-}: {
-	label: string;
-	value: string;
-	hint: string;
-	large?: boolean;
-}) {
+function MiniStat({ label, value, hint, large }: { label: string; value: string; hint: string; large?: boolean }) {
 	return (
 		<Paper className="flex flex-auto flex-col overflow-hidden rounded-xl shadow-none">
 			<div className="flex items-center justify-between px-2 pt-2">
@@ -247,7 +239,7 @@ function CashflowWidget({ stats, currency }: { stats: DashboardStats; currency: 
 						height={320}
 					/>
 				</div>
-				<div className="flex flex-col border-divider border-t border-solid lg:w-96 lg:border-t-0 lg:border-l">
+				<div className="border-divider flex flex-col border-t border-solid lg:w-96 lg:border-t-0 lg:border-l">
 					<div className="grid flex-auto grid-cols-2">
 						<div className="border-divider border-r border-b border-solid p-3">
 							<MiniStat
@@ -362,13 +354,7 @@ function DistributionWidget({ stats, currency }: { stats: DashboardStats; curren
 	);
 }
 
-function ActivityWidget({
-	entries,
-	currency
-}: {
-	entries: LedgerItem[];
-	currency: string;
-}) {
+function ActivityWidget({ entries, currency }: { entries: LedgerItem[]; currency: string }) {
 	return (
 		<Paper className="flex h-full flex-col overflow-hidden rounded-xl shadow-sm">
 			<div className="flex items-center justify-between p-6">
@@ -399,9 +385,7 @@ function ActivityWidget({
 							className="hover:bg-action-hover flex items-start justify-between gap-3 rounded-xl px-3 py-3"
 						>
 							<div className="min-w-0">
-								<Typography className="font-medium">
-									{KIND_LABEL[entry.kind] || entry.kind}
-								</Typography>
+								<Typography className="font-medium">{KIND_LABEL[entry.kind] || entry.kind}</Typography>
 								<Typography
 									className="truncate text-sm"
 									color="text.secondary"
@@ -411,9 +395,7 @@ function ActivityWidget({
 								</Typography>
 							</div>
 							<div className="shrink-0 text-right">
-								<Typography className="font-semibold">
-									{formatMoney(entry.amount, currency)}
-								</Typography>
+								<Typography className="font-semibold">{formatMoney(entry.amount, currency)}</Typography>
 								<Typography
 									className="text-sm"
 									color="text.secondary"
@@ -524,7 +506,9 @@ function WinPeakDashboardView() {
 			<div className="flex h-full flex-col items-center justify-center gap-4 p-8">
 				<Typography variant="h5">Could not load WinPeak data</Typography>
 				<Typography color="text.secondary">
-					{error instanceof Error ? error.message : 'Check that the admin API can reach the WinPeak database.'}
+					{error instanceof Error
+						? error.message
+						: 'Check that the admin API can reach the WinPeak database.'}
 				</Typography>
 				<Button
 					variant="contained"
@@ -542,6 +526,7 @@ function WinPeakDashboardView() {
 	const pendingWithdrawals = stats.queues?.pendingWithdrawals || 0;
 	const pendingTotal = pendingDeposits + pendingWithdrawals;
 	const unread = stats.content.unreadInbox || 0;
+	const waitingChats = stats.queues?.waitingSupportChats || 0;
 	const name = firstName(user?.displayName);
 
 	return (
@@ -581,8 +566,9 @@ function WinPeakDashboardView() {
 									className="mt-2 text-sm md:text-base"
 									color="text.secondary"
 								>
-									You have {unread} unread {unread === 1 ? 'message' : 'messages'} and {pendingTotal}{' '}
-									pending wallet {pendingTotal === 1 ? 'request' : 'requests'}.
+									You have {waitingChats} live {waitingChats === 1 ? 'chat' : 'chats'} waiting,{' '}
+									{unread} unread {unread === 1 ? 'message' : 'messages'} and {pendingTotal} pending
+									wallet {pendingTotal === 1 ? 'request' : 'requests'}.
 								</Typography>
 							</div>
 						</div>
@@ -646,12 +632,12 @@ function WinPeakDashboardView() {
 							className="flex"
 						>
 							<SummaryCard
-								title="Inbox"
-								value={unread.toLocaleString()}
-								unit="Unread messages"
-								footer="Comments:"
-								footerValue={stats.content.comments.toLocaleString()}
-								to="/apps/inbox"
+								title="Live chat"
+								value={waitingChats.toLocaleString()}
+								unit="Waiting for an agent"
+								footer="Unread inbox:"
+								footerValue={unread.toLocaleString()}
+								to="/apps/support"
 							/>
 						</motion.div>
 						<motion.div
