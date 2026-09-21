@@ -145,7 +145,8 @@ export const useInviteStaff = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (data: { name: string; email: string; password?: string }) => winpeakApi.inviteStaff(data),
+		mutationFn: (data: { name: string; email: string; password?: string; role?: string }) =>
+			winpeakApi.inviteStaff(data),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: staffQueryKey })
 	});
 };

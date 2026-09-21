@@ -72,3 +72,6 @@ amplifytools.xcconfig
 # Mirrored public-site uploads for admin previews
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# typescript incremental build cache
+*.tsbuildinfo

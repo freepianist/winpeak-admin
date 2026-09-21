@@ -13,6 +13,7 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -29,6 +30,15 @@ const Root = styled(FusePageCarded)(() => ({
 	}
 }));
 
+const ROLES = [
+	{ value: 'AFFILIATE_MANAGER', label: 'Affiliate manager', hint: 'Partners, commissions and payouts' },
+	{ value: 'SUPPORT_AGENT', label: 'Support agent', hint: 'Live chat only, no access to player or money tools' }
+];
+
+function roleLabel(value: string) {
+	return ROLES.find((role) => role.value === value)?.label || value;
+}
+
 function ManagersView() {
 	const { data: staff = [], isLoading } = useStaff();
 	const invite = useInviteStaff();
@@ -37,13 +47,14 @@ function ManagersView() {
 	const [name, setName] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [role, setRole] = useState('AFFILIATE_MANAGER');
 	const [created, setCreated] = useState<StaffMember | null>(null);
 
 	const columns = useMemo<MRT_ColumnDef<StaffMember>[]>(
 		() => [
 			{
 				accessorKey: 'name',
-				header: 'Manager',
+				header: 'Name',
 				Cell: ({ row }) => (
 					<div>
 						<Typography className="font-medium">{row.original.name}</Typography>
@@ -54,6 +65,17 @@ function ManagersView() {
 							{row.original.email}
 						</Typography>
 					</div>
+				)
+			},
+			{
+				accessorKey: 'role',
+				header: 'Role',
+				Cell: ({ row }) => (
+					<Chip
+						size="small"
+						label={roleLabel(row.original.role)}
+						variant="outlined"
+					/>
 				)
 			},
 			{
@@ -100,7 +122,8 @@ function ManagersView() {
 		const manager = await invite.mutateAsync({
 			name,
 			email,
-			password: password || undefined
+			password: password || undefined,
+			role
 		});
 		setCreated(manager);
 	}
@@ -113,8 +136,8 @@ function ManagersView() {
 		<Root
 			header={
 				<AdminPageHeader
-					title="Affiliate managers"
-					subtitle="They can manage partners and review invited, qualified, and expected income"
+					title="Staff"
+					subtitle="Affiliate managers handle partners and payouts; support agents answer live chat"
 					action={
 						<Button
 							variant="contained"
@@ -125,17 +148,18 @@ function ManagersView() {
 								setName('');
 								setEmail('');
 								setPassword('');
+								setRole('AFFILIATE_MANAGER');
 								setOpen(true);
 							}}
 						>
-							Add manager
+							Add staff
 						</Button>
 					}
 				/>
 			}
 			content={
 				<Paper
-					className="flex min-w-0 w-full flex-col rounded-b-none"
+					className="flex w-full min-w-0 flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable
@@ -150,11 +174,14 @@ function ManagersView() {
 						fullWidth
 						maxWidth="sm"
 					>
-						<DialogTitle>{created ? 'Manager created' : 'Add affiliate manager'}</DialogTitle>
+						<DialogTitle>{created ? 'Staff account created' : 'Add staff'}</DialogTitle>
 						<DialogContent className="flex flex-col gap-4 pt-2">
 							{created ? (
 								<>
-									<Alert severity="success">Share these credentials once. They sign in to the affiliate console.</Alert>
+									<Alert severity="success">
+										Share these credentials once. They sign in to this control panel as a{' '}
+										{roleLabel(created.role).toLowerCase()}.
+									</Alert>
 									<TextField
 										label="Email"
 										value={created.email}
@@ -170,6 +197,23 @@ function ManagersView() {
 								</>
 							) : (
 								<>
+									<TextField
+										label="Role"
+										select
+										value={role}
+										onChange={(event) => setRole(event.target.value)}
+										helperText={ROLES.find((option) => option.value === role)?.hint}
+										fullWidth
+									>
+										{ROLES.map((option) => (
+											<MenuItem
+												key={option.value}
+												value={option.value}
+											>
+												{option.label}
+											</MenuItem>
+										))}
+									</TextField>
 									<TextField
 										label="Name"
 										value={name}
@@ -192,7 +236,9 @@ function ManagersView() {
 									/>
 									{invite.isError && (
 										<Alert severity="error">
-											{invite.error instanceof Error ? invite.error.message : 'Could not create manager'}
+											{invite.error instanceof Error
+												? invite.error.message
+												: 'Could not create the staff account'}
 										</Alert>
 									)}
 								</>
