@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
 import { grantDepositPromos } from '@/lib/promos';
+import { notifyWalletOutcome } from '@/lib/payments/notify';
 import { createPayout, estimateCryptoAmount, isPayoutConfigured } from '@/lib/payments/nowpayments';
 import {
 	createConversion,
@@ -430,6 +431,14 @@ export async function approveWalletRequest(
 		} catch (error) {
 			console.error('Affiliate CPA accrual failed', error);
 		}
+
+		// Money reaching the wallet is the event worth an email. Approving a
+		// deposit the IPN already credited in full tops up nothing, and the player
+		// was told about it when it landed.
+		await notifyWalletOutcome(requestId, {
+			kind: 'deposit_credited',
+			credited: approved.credited
+		});
 	}
 
 	return approved.request;
@@ -469,7 +478,7 @@ async function finalizeSyncedWithdraw(
 	providerStatus: string,
 	reviewNote: string
 ) {
-	return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+	const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
 		const latest = await lockWalletRequest(tx, requestId);
 
 		if (!latest) {
@@ -477,7 +486,12 @@ async function finalizeSyncedWithdraw(
 		}
 
 		if (latest.status === 'APPROVED' || latest.status === 'REJECTED') {
-			return tx.walletRequest.findUniqueOrThrow({ where: { id: requestId }, include: WITH_PLAYER });
+			const request = await tx.walletRequest.findUniqueOrThrow({
+				where: { id: requestId },
+				include: WITH_PLAYER
+			});
+
+			return { request, settled: false };
 		}
 
 		if (outcome === 'failed') {
@@ -490,7 +504,7 @@ async function finalizeSyncedWithdraw(
 				});
 			}
 
-			return tx.walletRequest.update({
+			const request = await tx.walletRequest.update({
 				where: { id: requestId },
 				data: {
 					status: 'REJECTED',
@@ -501,11 +515,13 @@ async function finalizeSyncedWithdraw(
 				},
 				include: WITH_PLAYER
 			});
+
+			return { request, settled: true };
 		}
 
 		await applyWithdraw(latest.userId, money(latest.amount), tx);
 
-		return tx.walletRequest.update({
+		const request = await tx.walletRequest.update({
 			where: { id: requestId },
 			data: {
 				status: 'APPROVED',
@@ -516,7 +532,19 @@ async function finalizeSyncedWithdraw(
 			},
 			include: WITH_PLAYER
 		});
+
+		return { request, settled: true };
 	}, TX);
+
+	// The status re-check under lock means only one caller reaches a terminal
+	// state, so pressing Sync twice or racing the IPN cannot email twice.
+	if (result.settled) {
+		await notifyWalletOutcome(requestId, {
+			kind: outcome === 'failed' ? 'withdraw_declined' : 'withdraw_sent'
+		});
+	}
+
+	return result.request;
 }
 
 async function recordSyncProgress(requestId: string, data: Prisma.WalletRequestUpdateInput) {
@@ -729,7 +757,7 @@ export async function syncWalletRequest(requestId: string, reviewedBy: string) {
 }
 
 export async function rejectWalletRequest(requestId: string, reviewedBy: string, reviewNote?: string) {
-	return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+	const request = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
 		const request = await lockWalletRequest(tx, requestId);
 
 		if (!request) {
@@ -771,4 +799,12 @@ export async function rejectWalletRequest(requestId: string, reviewedBy: string,
 			}
 		});
 	}, TX);
+
+	// Only a pending request can be rejected, and that is checked under lock, so
+	// reaching here is always the one transition into REJECTED.
+	await notifyWalletOutcome(requestId, {
+		kind: request.type === 'WITHDRAW' ? 'withdraw_declined' : 'deposit_declined'
+	});
+
+	return request;
 }
