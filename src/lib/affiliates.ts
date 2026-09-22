@@ -189,70 +189,129 @@ export function serializeClick(row: ClickRecord) {
 	};
 }
 
-async function getRecentClicks(partnerId: string) {
-	const rows = await prisma
-		.$queryRaw<ClickRecord[]>`
-			WITH recent AS (
-				SELECT
-					id,
-					"visitorKey",
-					"landingPath",
-					referrer,
-					"createdAt",
-					"eventType",
-					"deviceType",
-					os,
-					browser,
-					country,
-					region,
-					city
-				FROM "AffiliateClick"
-				WHERE "partnerId" = ${partnerId}
-				ORDER BY "createdAt" DESC
-				LIMIT 100
-			),
-			scoped AS (
-				SELECT
-					id,
-					"visitorKey",
-					"landingPath",
-					referrer,
-					"createdAt",
-					"eventType",
-					"deviceType",
-					os,
-					browser,
-					country,
-					region,
-					city,
-					ROW_NUMBER() OVER (PARTITION BY "visitorKey" ORDER BY "createdAt" ASC, id ASC) AS "visitNumber",
-					COUNT(*) OVER (PARTITION BY "visitorKey") AS "visitorVisits"
-				FROM "AffiliateClick"
-				WHERE "partnerId" = ${partnerId}
-				  AND "visitorKey" IN (SELECT "visitorKey" FROM recent)
-			)
-			SELECT
-				s.id,
-				s."landingPath",
-				s.referrer,
-				s."createdAt",
-				s."visitorKey",
-				s."eventType",
-				s."deviceType",
-				s.os,
-				s.browser,
-				s.country,
-				s.region,
-				s.city,
-				s."visitNumber"::int AS "visitNumber",
-				s."visitorVisits"::int AS "visitorVisits"
-			FROM scoped s
-			INNER JOIN recent r ON r.id = s.id
-			ORDER BY s."createdAt" DESC
-		`
-		.catch((): ClickRecord[] => []);
+export const CLICKS_MAX_PAGE_SIZE = 100;
 
-	return rows.map(serializeClick);
+export type ClicksPageQuery = {
+	page?: number;
+	pageSize?: number;
+	visitType?: string;
+	search?: string;
+	sort?: 'asc' | 'desc';
+};
+
+// Built as plain SQL with positional params: nested Prisma.sql fragments break when the
+// globally cached client in db.ts outlives a dev hot reload.
+function clickFilters(params: unknown[], visitType?: string, search?: string) {
+	const conditions: string[] = [];
+	const bind = (value: unknown) => {
+		params.push(value);
+		return `$${params.length}`;
+	};
+	const fallbackType = `c."eventType" NOT IN (${[...VISIT_TYPES].map((type) => `'${type}'`).join(', ')})`;
+	const firstVisit = `NOT EXISTS (
+		SELECT 1 FROM "AffiliateClick" e
+		WHERE e."partnerId" = c."partnerId"
+		  AND e."visitorKey" = c."visitorKey"
+		  AND (e."createdAt" < c."createdAt" OR (e."createdAt" = c."createdAt" AND e.id < c.id))
+	)`;
+
+	if (visitType === 'unique') {
+		conditions.push(`(c."eventType" = 'unique' OR (${fallbackType} AND ${firstVisit}))`);
+	} else if (visitType === 'repeat') {
+		conditions.push(`(c."eventType" = 'repeat' OR (${fallbackType} AND NOT ${firstVisit}))`);
+	} else if (visitType && VISIT_TYPES.has(visitType)) {
+		conditions.push(`c."eventType" = ${bind(visitType)}`);
+	}
+
+	const term = search?.trim();
+
+	if (term) {
+		const pattern = bind(`%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`);
+		conditions.push(`(
+			c."landingPath" ILIKE ${pattern}
+			OR (CASE WHEN c.referrer = '' THEN 'Direct' ELSE c.referrer END) ILIKE ${pattern}
+			OR ('V-' || upper(substr(replace(c."visitorKey", '-', ''), 1, 8))) ILIKE ${pattern}
+			OR c."deviceType" ILIKE ${pattern}
+			OR c.os ILIKE ${pattern}
+			OR c.browser ILIKE ${pattern}
+			OR c.country ILIKE ${pattern}
+			OR c.region ILIKE ${pattern}
+			OR c.city ILIKE ${pattern}
+		)`);
+	}
+
+	return conditions.map((condition) => ` AND ${condition}`).join('');
+}
+
+export async function getClicksPage(partnerId: string, query: ClicksPageQuery = {}) {
+	const page = Math.max(0, Math.floor(Number(query.page) || 0));
+	const pageSize = Math.min(CLICKS_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(query.pageSize) || 15)));
+	const direction = query.sort === 'asc' ? 'ASC' : 'DESC';
+	const params: unknown[] = [partnerId];
+	const filters = clickFilters(params, query.visitType, query.search);
+	const limit = `$${params.length + 1}`;
+	const offset = `$${params.length + 2}`;
+
+	const [rows, total] = await Promise.all([
+		prisma
+			.$queryRawUnsafe<ClickRecord[]>(
+				`
+				WITH page AS (
+					SELECT
+						c.id,
+						c."visitorKey",
+						c."landingPath",
+						c.referrer,
+						c."createdAt",
+						c."eventType",
+						c."deviceType",
+						c.os,
+						c.browser,
+						c.country,
+						c.region,
+						c.city
+					FROM "AffiliateClick" c
+					WHERE c."partnerId" = $1${filters}
+					ORDER BY c."createdAt" ${direction}, c.id ${direction}
+					LIMIT ${limit} OFFSET ${offset}
+				),
+				scoped AS (
+					SELECT
+						id,
+						ROW_NUMBER() OVER (PARTITION BY "visitorKey" ORDER BY "createdAt" ASC, id ASC) AS "visitNumber",
+						COUNT(*) OVER (PARTITION BY "visitorKey") AS "visitorVisits"
+					FROM "AffiliateClick"
+					WHERE "partnerId" = $1
+					  AND "visitorKey" IN (SELECT "visitorKey" FROM page)
+				)
+				SELECT
+					p.*,
+					s."visitNumber"::int AS "visitNumber",
+					s."visitorVisits"::int AS "visitorVisits"
+				FROM page p
+				INNER JOIN scoped s ON s.id = p.id
+				ORDER BY p."createdAt" ${direction}, p.id ${direction}
+				`,
+				...params,
+				pageSize,
+				page * pageSize
+			)
+			.catch((): ClickRecord[] => []),
+		prisma
+			.$queryRawUnsafe<{ total: number }[]>(
+				`SELECT COUNT(*)::int AS total FROM "AffiliateClick" c WHERE c."partnerId" = $1${filters}`,
+				...params
+			)
+			.then((result) => Number(result[0]?.total || 0))
+			.catch(() => 0)
+	]);
+
+	return { rows: rows.map(serializeClick), total, page, pageSize };
+}
+
+async function getRecentClicks(partnerId: string) {
+	const { rows } = await getClicksPage(partnerId, { pageSize: 20 });
+	return rows;
 }
 
 function lastUtcDays(count: number) {

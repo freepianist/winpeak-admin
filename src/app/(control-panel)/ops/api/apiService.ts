@@ -5,6 +5,8 @@ import type {
 	BlogPost,
 	DashboardStats,
 	GameReview,
+	AffiliateClickPage,
+	AffiliateClickPageParams,
 	AffiliateCommission,
 	AffiliatePartner,
 	AffiliatePartnerDetail,
@@ -130,6 +132,17 @@ export const winpeakApi = {
 	updatePayout: (id: string, data: { status?: string; note?: string }) =>
 		unwrap(api.patch(`winpeak/affiliates/payouts/${id}`, { json: data }).json<AffiliatePayout>()),
 	getMyAffiliate: () => unwrap(api.get('winpeak/affiliates/me', { timeout: 60_000 }).json<AffiliatePartnerDetail>()),
+	getMyAffiliateClicks: (params: AffiliateClickPageParams) => {
+		const search = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) });
+
+		if (params.visitType) search.set('visitType', params.visitType);
+
+		if (params.search) search.set('search', params.search);
+
+		if (params.sort) search.set('sort', params.sort);
+
+		return unwrap(api.get(`winpeak/affiliates/me/clicks?${search.toString()}`).json<AffiliateClickPage>());
+	},
 	getStaff: () => unwrap(api.get('winpeak/staff').json<StaffMember[]>()),
 	inviteStaff: (data: { name: string; email: string; password?: string; role?: string }) =>
 		unwrap(api.post('winpeak/staff', { json: data }).json<StaffMember>()),

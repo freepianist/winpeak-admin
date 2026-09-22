@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { winpeakApi } from '../apiService';
-import type { AffiliatePartner } from '../types';
+import type { AffiliateClickPageParams, AffiliatePartner } from '../types';
 
 export const marketingStatsQueryKey = ['winpeak', 'affiliates', 'stats'];
 export const partnersQueryKey = ['winpeak', 'affiliates'];
@@ -129,6 +129,14 @@ export const useMyAffiliate = () => {
 		queryKey: myAffiliateQueryKey,
 		staleTime: 0,
 		refetchOnMount: 'always'
+	});
+};
+
+export const useMyAffiliateClicks = (params: AffiliateClickPageParams) => {
+	return useQuery({
+		queryFn: () => winpeakApi.getMyAffiliateClicks(params),
+		queryKey: [...myAffiliateQueryKey, 'clicks', params],
+		placeholderData: keepPreviousData
 	});
 };
 
