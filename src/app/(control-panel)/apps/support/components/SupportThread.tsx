@@ -31,6 +31,14 @@ type SupportThreadProps = {
 	onDelete: (id: string) => void;
 };
 
+/// MUI pads the icon and the message differently, which leaves small text sitting
+/// off-centre from the icon.
+const COMPACT_ALERT_SX = {
+	alignItems: 'center',
+	'& .MuiAlert-icon': { py: 0.5 },
+	'& .MuiAlert-message': { py: 0.5 }
+};
+
 function dayLabel(date: Date) {
 	if (isToday(date)) {
 		return 'Today';
@@ -223,6 +231,7 @@ function SupportThread(props: SupportThreadProps) {
 							severity="info"
 							variant="outlined"
 							className="py-0.5 text-xs"
+							sx={COMPACT_ALERT_SX}
 						>
 							Escalated: {thread.handoffReason}
 						</Alert>
@@ -232,6 +241,7 @@ function SupportThread(props: SupportThreadProps) {
 							severity="warning"
 							variant="outlined"
 							className="py-0.5 text-xs"
+							sx={COMPACT_ALERT_SX}
 						>
 							This player&apos;s account is {thread.player.status.toLowerCase()}.
 						</Alert>
