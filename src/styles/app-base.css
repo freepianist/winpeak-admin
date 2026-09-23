@@ -54,6 +54,47 @@ html, body {
     z-index: 99;
 }
 
+/*
+ * perfect-scrollbar's defaults paint a light #eee rail and a fat #999 thumb on hover, which clashes
+ * with the theme. Its stylesheet loads after this one, so these selectors carry an extra `.ps` to win.
+ */
+.ps.ps .ps__rail-x:hover,
+.ps.ps .ps__rail-y:hover,
+.ps.ps .ps__rail-x:focus,
+.ps.ps .ps__rail-y:focus,
+.ps.ps .ps__rail-x.ps--clicking,
+.ps.ps .ps__rail-y.ps--clicking {
+    background-color: transparent;
+    opacity: 1;
+}
+
+.ps .ps__thumb-y,
+.ps .ps__thumb-x {
+    background-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.ps .ps__thumb-y {
+    width: 6px;
+}
+
+.ps .ps__thumb-x {
+    height: 6px;
+}
+
+.ps .ps__rail-y:hover > .ps__thumb-y,
+.ps .ps__rail-y:focus > .ps__thumb-y,
+.ps .ps__rail-y.ps--clicking .ps__thumb-y {
+    width: 8px;
+    background-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.ps .ps__rail-x:hover > .ps__thumb-x,
+.ps .ps__rail-x:focus > .ps__thumb-x,
+.ps .ps__rail-x.ps--clicking .ps__thumb-x {
+    height: 8px;
+    background-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
 [dir="rtl"] .ps__thumb-y {
     right: auto !important;
     left: 2px!important;
