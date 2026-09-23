@@ -327,6 +327,21 @@ export type AffiliateClick = {
 	city: string;
 };
 
+export type AffiliateClickPage = {
+	rows: AffiliateClick[];
+	total: number;
+	page: number;
+	pageSize: number;
+};
+
+export type AffiliateClickPageParams = {
+	page: number;
+	pageSize: number;
+	visitType?: string;
+	search?: string;
+	sort?: 'asc' | 'desc';
+};
+
 export type AffiliateClickSeriesPoint = {
 	date: string;
 	clicks: number;

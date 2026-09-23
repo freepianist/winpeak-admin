@@ -309,6 +309,8 @@ model LedgerEntry {
   @@index([source, roundId])
   @@index([referenceId])
   @@index([source, providerId, gameCode])
+  /// The public wins feed reads the newest WIN rows across every player.
+  @@index([kind, createdAt(sort: Desc)])
 }
 
 model GameReview {

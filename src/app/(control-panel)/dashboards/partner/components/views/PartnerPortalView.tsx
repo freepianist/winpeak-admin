@@ -791,7 +791,7 @@ function PartnerPortalView() {
 							signups={data.stats.signups}
 							ftds={data.stats.ftds}
 						/>
-						<ClicksWidget clicks={recentClicks.slice(0, 8)} />
+						<ClicksWidget clicks={recentClicks.slice(0, 4)} />
 					</div>
 
 					<div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
