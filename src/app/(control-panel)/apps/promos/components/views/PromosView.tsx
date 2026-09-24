@@ -110,13 +110,13 @@ function PromosView() {
 			{
 				accessorKey: 'bonusAmount',
 				header: 'Bonus',
-				Cell: ({ cell }) => formatMoney(cell.getValue<number>())
+				Cell: ({ cell, row }) => formatMoney(cell.getValue<number>(), row.original.currency)
 			},
 			{
 				accessorKey: 'wagerRemaining',
 				header: 'Wager left',
 				Cell: ({ row }) =>
-					`${formatMoney(row.original.wagerRemaining)} / ${formatMoney(row.original.wagerRequired)}`
+					`${formatMoney(row.original.wagerRemaining, row.original.currency)} / ${formatMoney(row.original.wagerRequired, row.original.currency)}`
 			},
 			{
 				accessorKey: 'status',

@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
+import { getUserUsdRates, toUsd, usdRateFor } from '@/lib/pricing';
 import type { AffiliateVisitType } from '@/app/(control-panel)/ops/api/types';
 
 export function trackingLink(code: string) {
@@ -389,17 +390,27 @@ export async function getPartnerBook(partnerId: string) {
 	let wins = 0;
 
 	if (playerIds.length) {
-		const rows = await prisma.ledgerEntry.groupBy({
-			by: ['kind'],
-			where: { userId: { in: playerIds }, kind: { in: ['BET', 'WIN'] } },
-			_sum: { amount: true }
-		});
+		// Wallets differ in currency, so each player's play is priced in USD (at
+		// today's market rate) before it is added up against a USD deal.
+		const [rows, rates] = await Promise.all([
+			prisma.ledgerEntry.groupBy({
+				by: ['userId', 'kind'],
+				where: { userId: { in: playerIds }, kind: { in: ['BET', 'WIN'] } },
+				_sum: { amount: true }
+			}),
+			getUserUsdRates(playerIds)
+		]);
 
 		for (const row of rows) {
-			if (row.kind === 'BET') bets = money(row._sum.amount);
+			const usd = toUsd(money(row._sum.amount), rates.get(row.userId) ?? 1);
 
-			if (row.kind === 'WIN') wins = money(row._sum.amount);
+			if (row.kind === 'BET') bets += usd;
+
+			if (row.kind === 'WIN') wins += usd;
 		}
+
+		bets = money(bets);
+		wins = money(wins);
 	}
 
 	const ggr = Math.max(0, bets - wins);
@@ -482,11 +493,14 @@ export async function getPartnerBook(partnerId: string) {
 	};
 }
 
-export async function accrueAffiliateCpa(userId: string, depositAmount: number) {
+/** `walletAmount` is in the player's wallet currency; partner deals are in USD. */
+export async function accrueAffiliateCpa(userId: string, walletAmount: number) {
 	const user = await prisma.user.findUnique({
 		where: { id: userId },
-		include: { referredBy: true }
+		include: { referredBy: true, wallet: { select: { currency: true } } }
 	});
+
+	const depositAmount = toUsd(walletAmount, await usdRateFor(user?.market, user?.wallet?.currency));
 
 	if (!user || user.firstDepositAt) {
 		return;

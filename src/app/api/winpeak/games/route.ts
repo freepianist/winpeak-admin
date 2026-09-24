@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
+import { getUserUsdRates, toUsd } from '@/lib/pricing';
 import { requireAdmin, unauthorized } from '@/lib/admin-auth';
 
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
 			// `internal` entries are deposits and bonuses, which belong to no game even
 			// on the rare row that carries a gameCode.
 			where: { gameCode: { not: null }, source: { not: 'internal' } },
-			select: { source: true, providerId: true, gameCode: true, kind: true, amount: true }
+			select: { userId: true, source: true, providerId: true, gameCode: true, kind: true, amount: true }
 		}),
 		// Aggregated in memory rather than with groupBy because plays and reviews live
 		// in separate tables and have to be folded into one row per game.
@@ -61,16 +62,24 @@ export async function GET() {
 		return current;
 	};
 
+	// Plays come from wallets in different currencies, so they are totalled in USD.
+	const nonUsd = await prisma.wallet.findMany({
+		where: { currency: { not: 'USD' } },
+		select: { userId: true }
+	});
+	const rates = await getUserUsdRates(nonUsd.map((wallet) => wallet.userId));
+
 	for (const entry of entries) {
 		const current = bucket(entry, entry.gameCode || '');
+		const amount = toUsd(money(entry.amount), rates.get(entry.userId) ?? 1);
 
 		if (entry.kind === 'BET') {
-			current.bets += money(entry.amount);
+			current.bets += amount;
 			current.rounds += 1;
 		}
 
 		if (entry.kind === 'WIN') {
-			current.wins += money(entry.amount);
+			current.wins += amount;
 		}
 	}
 

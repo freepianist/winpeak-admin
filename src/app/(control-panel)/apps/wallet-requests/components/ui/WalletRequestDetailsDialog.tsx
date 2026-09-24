@@ -83,7 +83,8 @@ function WalletRequestDetailsDialog(props: { request: WalletRequest | null; onCl
 		return null;
 	}
 
-	const network = request.payCurrency ? request.payCurrency.toUpperCase() : '';
+	const local = request.provider === 'daypgl';
+	const network = local ? request.localCurrency || '' : request.payCurrency ? request.payCurrency.toUpperCase() : '';
 
 	return (
 		<Dialog
@@ -145,10 +146,45 @@ function WalletRequestDetailsDialog(props: { request: WalletRequest | null; onCl
 				</Section>
 
 				<Section title="Payment">
-					<Row
-						label="Network"
-						value={network}
-					/>
+					{local ? (
+						<>
+							<Row
+								label="Method"
+								value={`Local payment (DAYPGL) · ${[request.country, request.channel].filter(Boolean).join(' · ')}`}
+							/>
+							<Row
+								label={request.type === 'DEPOSIT' ? 'Local amount charged' : 'Local amount paid out'}
+								value={request.localAmount != null ? `${request.localAmount} ${request.localCurrency || ''}` : ''}
+							/>
+							<Row
+								label="Rate locked"
+								value={
+									request.fxRate != null
+										? `${request.fxRate} ${request.localCurrency || ''} per ${request.currency}`
+										: ''
+								}
+							/>
+							{request.payeeName ? (
+								<Row
+									label="Account holder"
+									value={request.payeeName}
+								/>
+							) : null}
+						</>
+					) : (
+						<>
+							<Row
+								label="Network"
+								value={network}
+							/>
+							{request.usdRate != null ? (
+								<Row
+									label={request.type === 'DEPOSIT' ? 'Worth in USD' : 'USD to pay out'}
+									value={`${formatMoney(request.amountUsd, 'USD')} at ${request.usdRate} ${request.currency} per USD`}
+								/>
+							) : null}
+						</>
+					)}
 					{request.txHash ? (
 						<Row
 							label="Transaction hash"
@@ -159,7 +195,7 @@ function WalletRequestDetailsDialog(props: { request: WalletRequest | null; onCl
 					) : null}
 					{request.payoutAddress ? (
 						<Row
-							label="Payout address"
+							label={local ? 'Payout account' : 'Payout address'}
 							value={request.payoutAddress}
 							mono
 							copyable

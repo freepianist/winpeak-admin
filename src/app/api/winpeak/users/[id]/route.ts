@@ -25,14 +25,16 @@ export async function GET(_request: Request, context: RouteContext) {
 			where: { userId: id },
 			orderBy: { createdAt: 'desc' },
 			take: 100,
-			include: { user: { select: { firstName: true, lastName: true, email: true } } }
+			include: {
+				user: { select: { firstName: true, lastName: true, email: true, wallet: { select: { currency: true } } } }
+			}
 		}),
 		prisma.playerBonus.findMany({
 			where: { userId: id },
 			orderBy: { grantedAt: 'desc' },
 			include: {
 				offer: { select: { name: true, kind: true } },
-				user: { select: { firstName: true, lastName: true, email: true } }
+				user: { select: { firstName: true, lastName: true, email: true, wallet: { select: { currency: true } } } }
 			}
 		})
 	]);

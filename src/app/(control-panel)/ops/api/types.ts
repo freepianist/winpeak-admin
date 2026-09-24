@@ -73,6 +73,21 @@ export type WalletRequest = {
 	creditedAmount: number | null;
 	/** EXACT, UNDERPAID or OVERPAID against the invoiced amount. */
 	paymentOutcome: string;
+	/** "daypgl" for the local-currency rail, empty for crypto. */
+	provider: string;
+	country: string;
+	localCurrency: string;
+	/** Local-currency figure DAYPGL was asked for. */
+	localAmount: number | null;
+	/** Local units per 1 wallet unit, spread included, locked when the request was made. */
+	fxRate: number | null;
+	/** Crypto on a non-USD wallet: wallet units per 1 USD, spread included. Null on USD wallets. */
+	usdRate: number | null;
+	/** What the crypto side is worth in USD: the invoice, or the payout to send. */
+	amountUsd: number;
+	/** DAYPGL trade_type (deposit) or bank_code (payout). */
+	channel: string;
+	payeeName: string;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -88,6 +103,8 @@ export type LedgerItem = {
 	userId: string;
 	playerName: string;
 	playerEmail: string;
+	/** The player's wallet currency; amounts are in it. */
+	currency: string;
 	providerTxId: string | null;
 	referenceId: string | null;
 	roundId: string | null;
@@ -420,6 +437,7 @@ export type PlayerBonus = {
 	userId: string;
 	playerName: string;
 	playerEmail: string;
+	currency: string;
 	offerId: string;
 	offerName: string;
 	kind: string;
@@ -486,6 +504,89 @@ export type PaymentSettingsInput = {
 	manualMinWithdraw: number;
 	wallets: Omit<ManualWallet, 'label' | 'updatedAt'>[];
 };
+
+export type LocalPaymentChannel = {
+	kind: WalletRequestType;
+	code: string;
+	label: string;
+	enabled: boolean;
+};
+
+/** One DAYPGL country as staff configure it. */
+export type LocalPaymentCountry = {
+	country: string;
+	currency: string;
+	/** Local units per 1 USD, before spread. */
+	fxRate: number;
+	depositSpreadPct: number;
+	withdrawSpreadPct: number;
+	minDepositUsd: number;
+	minWithdrawUsd: number;
+	enabled: boolean;
+	scorpioAgentId: string | null;
+	oroplayAgentId: string | null;
+	/** Accounts opened on this market, which lock its currency. */
+	boundUsers: number;
+	channels: LocalPaymentChannel[];
+	/** Merchant payout balance at DAYPGL, when it could be read. */
+	balance: { available: number; frozen: number; currency: string } | null;
+	balanceError: string;
+	updatedBy: string;
+	updatedAt: string | null;
+};
+
+export type LocalPaymentSettings = {
+	configured: boolean;
+	/** Player site origin without `www`; each country is served on its `<code>.` subdomain. */
+	siteOrigin: string;
+	payinCallbackUrl: string;
+	payoutCallbackUrl: string;
+	countries: LocalPaymentCountry[];
+};
+
+export type LocalPaymentSettingsInput = {
+	countries: Omit<LocalPaymentCountry, 'balance' | 'balanceError' | 'boundUsers' | 'updatedBy' | 'updatedAt'>[];
+};
+
+export type GameAgentSource = 'scorpio' | 'oroplay';
+
+/** A game aggregator account in one currency. Secrets are never sent back, only whether one is stored. */
+export type GameAgent = {
+	id: string;
+	label: string;
+	source: GameAgentSource;
+	currency: string;
+	apiBaseUrl: string;
+	language: string;
+	clientId: string;
+	proxyUrl: string;
+	hasApiToken: boolean;
+	hasClientSecret: boolean;
+	enabled: boolean;
+	/** Markets this agent is assigned to. */
+	countries: string[];
+	updatedBy: string;
+	updatedAt: string | null;
+};
+
+export type GameAgentSettings = {
+	keyConfigured: boolean;
+	scorpioCallbackUrl: string;
+	oroplayCallbackBase: string;
+	agents: GameAgent[];
+};
+
+export type GameAgentInput = Pick<
+	GameAgent,
+	'label' | 'source' | 'currency' | 'apiBaseUrl' | 'language' | 'clientId' | 'proxyUrl' | 'enabled'
+> & {
+	id?: string;
+	/** Blank keeps the stored secret. */
+	apiToken?: string;
+	clientSecret?: string;
+};
+
+export type GameAgentTestResult = { ok: boolean; message: string };
 
 export type SupportStatus = 'BOT' | 'WAITING_AGENT' | 'AGENT' | 'RESOLVED';
 export type SupportAuthor = 'VISITOR' | 'BOT' | 'AGENT' | 'SYSTEM';

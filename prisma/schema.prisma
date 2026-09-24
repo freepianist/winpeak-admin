@@ -191,6 +191,9 @@ model User {
   dateOfBirth           DateTime?
   ageVerifiedAt         DateTime?
   country               String?
+  /// The local market the account was opened on; null is the main domain (USD).
+  /// Mirrors winpeak/prisma/schema.prisma.
+  market                String?
   lastIp                String?
   sessionVersion        Int                    @default(1)
   createdAt             DateTime               @default(now())
@@ -213,6 +216,7 @@ model User {
   @@index([referredByAffiliateId])
   @@index([referredByUserId])
   @@index([country])
+  @@index([market])
 }
 
 model Wallet {
@@ -265,6 +269,21 @@ model WalletRequest {
   // What the casino actually received/spent in its settlement currency
   settleCurrency String?
   settleAmount   Decimal?            @db.Decimal(18, 8)
+  // "daypgl" for the local-currency rail; null is the crypto rail.
+  provider       String?
+  // Local rail only. `amount` is in the wallet's currency; these record the
+  // local-currency figure DAYPGL was asked for and the rate it was priced at
+  // (local units per wallet unit), locked when the request was raised.
+  country        String?
+  localCurrency  String?
+  localAmount    Decimal?            @db.Decimal(18, 4)
+  fxRate         Decimal?            @db.Decimal(18, 8)
+  // Wallet-currency units per 1 USD on a non-USD wallet; null means 1.
+  usdRate        Decimal?            @db.Decimal(18, 8)
+  // DAYPGL trade_type for a deposit, bank_code for a payout
+  channel        String?
+  // Payout recipient; the account number itself lives in payoutAddress
+  payeeName      String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   payments       DepositPayment[]
@@ -272,6 +291,7 @@ model WalletRequest {
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([conversionId])
+  @@index([provider, status])
 }
 
 /**
@@ -634,6 +654,70 @@ model ManualWallet {
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/// A local market, served on its `<code>.` subdomain. Mirrors
+/// winpeak/prisma/schema.prisma.
+model LocalPaymentCountry {
+  /// ISO 3166 alpha-2, as DAYPGL's `country` parameter spells it
+  country           String                @id
+  currency          String
+  /// Local currency units per 1 USD
+  fxRate            Decimal               @db.Decimal(18, 8)
+  depositSpreadPct  Float                 @default(0)
+  withdrawSpreadPct Float                 @default(0)
+  minDepositUsd     Float                 @default(10)
+  minWithdrawUsd    Float                 @default(10)
+  enabled           Boolean               @default(false)
+  scorpioAgentId    String?
+  scorpioAgent      GameAgent?            @relation("ScorpioAgentCountries", fields: [scorpioAgentId], references: [id], onDelete: Restrict)
+  oroplayAgentId    String?
+  oroplayAgent      GameAgent?            @relation("OroplayAgentCountries", fields: [oroplayAgentId], references: [id], onDelete: Restrict)
+  updatedBy         String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  channels          LocalPaymentChannel[]
+}
+
+/// A game aggregator account in one currency, assigned to local markets.
+/// Mirrors winpeak/prisma/schema.prisma.
+model GameAgent {
+  id                  String                @id @default(cuid())
+  label               String
+  source              GameSource
+  currency            String
+  apiBaseUrl          String
+  language            String?
+  apiTokenEnc         String?
+  clientId            String?
+  clientSecretEnc     String?
+  proxyUrl            String?
+  enabled             Boolean               @default(true)
+  updatedBy           String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  scorpioCountries    LocalPaymentCountry[] @relation("ScorpioAgentCountries")
+  oroplayCountries    LocalPaymentCountry[] @relation("OroplayAgentCountries")
+
+  @@unique([source, clientId])
+}
+
+/// A DAYPGL payment method in one country: a `trade_type` for deposits or a
+/// `bank_code` for payouts, copied from the merchant portal.
+model LocalPaymentChannel {
+  id          String              @id @default(cuid())
+  country     String
+  countryRow  LocalPaymentCountry @relation(fields: [country], references: [country], onDelete: Cascade)
+  kind        WalletRequestType
+  code        String
+  label       String
+  enabled     Boolean             @default(true)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([country, kind, code])
+  @@index([country, kind])
 }
 
 /// A studio the public site mirrors from an aggregator for its game lobby. The
