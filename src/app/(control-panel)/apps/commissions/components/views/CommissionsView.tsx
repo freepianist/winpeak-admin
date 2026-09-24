@@ -11,6 +11,8 @@ import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Link from '@fuse/core/Link';
+import NavLinkAdapter from '@fuse/core/NavLinkAdapter';
+import FuseSvgIcon from '@fuse/core/FuseSvgIcon';
 import { format } from 'date-fns';
 import { enqueueSnackbar } from 'notistack';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
@@ -118,16 +120,18 @@ function CommissionsView() {
 								Void
 							</Button>
 						)}
-						{(row.original.status === 'APPROVED' || row.original.status === 'PENDING') && (
+						{row.original.status === 'PAID' && !row.original.payoutId && (
 							<Button
 								size="small"
 								onClick={() =>
-									void update
-										.mutateAsync({ id: row.original.id, status: 'PAID' })
-										.then(() => enqueueSnackbar('Marked paid', { variant: 'success' }))
+									void update.mutateAsync({ id: row.original.id, status: 'APPROVED' }).then(() =>
+										enqueueSnackbar('Moved back to approved. Pay it from Payouts.', {
+											variant: 'success'
+										})
+									)
 								}
 							>
-								Mark paid
+								Undo paid
 							</Button>
 						)}
 					</div>
@@ -146,12 +150,23 @@ function CommissionsView() {
 			header={
 				<AdminPageHeader
 					title="Commissions"
-					subtitle="CPA hits on first deposit. Book rev share from a partner page, then approve or pay."
+					subtitle="CPA hits on first deposit. Book rev share from a partner page, approve it here, then pay it from Payouts."
+					action={
+						<Button
+							variant="contained"
+							color="secondary"
+							component={NavLinkAdapter}
+							to="/apps/payouts"
+							startIcon={<FuseSvgIcon>lucide:banknote</FuseSvgIcon>}
+						>
+							Record payout
+						</Button>
+					}
 				/>
 			}
 			content={
 				<Paper
-					className="flex min-w-0 w-full flex-col rounded-b-none"
+					className="flex w-full min-w-0 flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable

@@ -7,6 +7,7 @@ import FuseLoading from '@fuse/core/FuseLoading';
 import FusePageCarded from '@fuse/core/FusePageCarded';
 import { styled } from '@mui/material/styles';
 import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -22,8 +23,14 @@ import { format } from 'date-fns';
 import { statusLabel } from '@/lib/status-label';
 import { enqueueSnackbar } from 'notistack';
 import AdminPageHeader from '@/app/(control-panel)/ops/components/AdminPageHeader';
-import { useCreatePayout, usePartners, usePayouts, useUpdatePayout } from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
-import type { AffiliatePayout } from '@/app/(control-panel)/ops/api/types';
+import {
+	useCommissions,
+	useCreatePayout,
+	usePartners,
+	usePayouts,
+	useUpdatePayout
+} from '@/app/(control-panel)/ops/api/hooks/useAffiliates';
+import type { AffiliateCommission, AffiliatePayout } from '@/app/(control-panel)/ops/api/types';
 import { formatMoney } from '@/lib/money';
 
 const Root = styled(FusePageCarded)(() => ({
@@ -35,12 +42,48 @@ const Root = styled(FusePageCarded)(() => ({
 function PayoutsView() {
 	const { data: payouts = [], isLoading } = usePayouts();
 	const { data: partners = [] } = usePartners();
+	const { data: commissions = [] } = useCommissions();
 	const create = useCreatePayout();
 	const update = useUpdatePayout();
 	const [open, setOpen] = useState(false);
 	const [partnerId, setPartnerId] = useState('');
-	const [amount, setAmount] = useState('');
+	const [selected, setSelected] = useState<string[]>([]);
 	const [note, setNote] = useState('');
+
+	const approvedByPartner = useMemo(() => {
+		const result = new Map<string, AffiliateCommission[]>();
+		commissions
+			.filter((row) => row.status === 'APPROVED' && !row.payoutId)
+			.forEach((row) => result.set(row.partnerId, [...(result.get(row.partnerId) || []), row]));
+		return result;
+	}, [commissions]);
+
+	const approved = approvedByPartner.get(partnerId) || [];
+	const total = approved.filter((row) => selected.includes(row.id)).reduce((sum, row) => sum + row.amount, 0);
+	const allSelected = approved.length > 0 && selected.length === approved.length;
+
+	const sortedPartners = useMemo(
+		() =>
+			[...partners].sort(
+				(a, b) => (approvedByPartner.get(b.id)?.length || 0) - (approvedByPartner.get(a.id)?.length || 0)
+			),
+		[partners, approvedByPartner]
+	);
+
+	const choosePartner = (id: string) => {
+		setPartnerId(id);
+		setSelected((approvedByPartner.get(id) || []).map((row) => row.id));
+	};
+
+	const toggle = (id: string) =>
+		setSelected((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+
+	const close = () => {
+		setOpen(false);
+		setPartnerId('');
+		setSelected([]);
+		setNote('');
+	};
 
 	const columns = useMemo<MRT_ColumnDef<AffiliatePayout>[]>(
 		() => [
@@ -62,6 +105,11 @@ function PayoutsView() {
 				Cell: ({ row }) => formatMoney(row.original.amount)
 			},
 			{
+				accessorKey: 'commissionCount',
+				header: 'Commissions',
+				Cell: ({ row }) => row.original.commissionCount || '—'
+			},
+			{
 				accessorKey: 'status',
 				header: 'Status',
 				Cell: ({ row }) => (
@@ -73,7 +121,7 @@ function PayoutsView() {
 					/>
 				)
 			},
-			{ accessorKey: 'note', header: 'Note' },
+			{ accessorKey: 'note', header: 'Reference' },
 			{
 				accessorKey: 'createdAt',
 				header: 'When',
@@ -109,7 +157,7 @@ function PayoutsView() {
 			header={
 				<AdminPageHeader
 					title="Affiliate payouts"
-					subtitle="Record money you sent a partner. They can see these, but cannot create them."
+					subtitle="Pay a partner's approved commissions. Recording a payout marks them paid, and the partner sees it in their earnings."
 					action={
 						<Button
 							variant="contained"
@@ -124,7 +172,7 @@ function PayoutsView() {
 			}
 			content={
 				<Paper
-					className="flex min-w-0 w-full flex-col rounded-b-none"
+					className="flex w-full min-w-0 flex-col rounded-b-none"
 					elevation={2}
 				>
 					<DataTable
@@ -135,7 +183,7 @@ function PayoutsView() {
 					/>
 					<Dialog
 						open={open}
-						onClose={() => setOpen(false)}
+						onClose={close}
 						fullWidth
 						maxWidth="sm"
 					>
@@ -145,50 +193,128 @@ function PayoutsView() {
 								select
 								label="Partner"
 								value={partnerId}
-								onChange={(event) => setPartnerId(event.target.value)}
+								onChange={(event) => choosePartner(event.target.value)}
 								fullWidth
 							>
-								{partners.map((partner) => (
-									<MenuItem
-										key={partner.id}
-										value={partner.id}
-									>
-										{partner.name} · {partner.code}
-									</MenuItem>
-								))}
+								{sortedPartners.map((partner) => {
+									const rows = approvedByPartner.get(partner.id) || [];
+									return (
+										<MenuItem
+											key={partner.id}
+											value={partner.id}
+											disabled={rows.length === 0}
+										>
+											<div className="flex w-full items-center justify-between gap-4">
+												<span className="truncate">
+													{partner.name} · {partner.code}
+												</span>
+												<Typography
+													className="shrink-0 text-sm"
+													color="text.secondary"
+												>
+													{rows.length
+														? `${formatMoney(rows.reduce((sum, row) => sum + row.amount, 0))} approved`
+														: 'Nothing approved'}
+												</Typography>
+											</div>
+										</MenuItem>
+									);
+								})}
 							</TextField>
+
+							{partnerId && (
+								<div className="border-divider overflow-hidden rounded-lg border border-solid">
+									<div className="border-divider flex items-center justify-between gap-3 border-b border-solid py-1 pr-4 pl-1">
+										<div className="flex items-center">
+											<Checkbox
+												size="small"
+												checked={allSelected}
+												indeterminate={selected.length > 0 && !allSelected}
+												onChange={() =>
+													setSelected(allSelected ? [] : approved.map((row) => row.id))
+												}
+											/>
+											<Typography className="text-sm font-medium">
+												Approved commissions
+											</Typography>
+										</div>
+										<Typography
+											className="text-sm"
+											color="text.secondary"
+										>
+											{selected.length} of {approved.length} selected
+										</Typography>
+									</div>
+									<div className="max-h-64 overflow-y-auto">
+										{approved.map((row) => (
+											<label
+												key={row.id}
+												className="hover:bg-action-hover flex cursor-pointer items-center justify-between gap-3 py-1 pr-4 pl-1"
+											>
+												<div className="flex min-w-0 items-center">
+													<Checkbox
+														size="small"
+														checked={selected.includes(row.id)}
+														onChange={() => toggle(row.id)}
+													/>
+													<div className="min-w-0">
+														<Typography className="text-sm font-medium">
+															{row.kind === 'CPA' ? 'CPA' : 'Rev share'}
+														</Typography>
+														<Typography
+															className="truncate text-xs"
+															color="text.secondary"
+														>
+															{[
+																row.playerEmail,
+																format(new Date(row.createdAt), 'MMM d, yyyy')
+															]
+																.filter(Boolean)
+																.join(' · ')}
+														</Typography>
+													</div>
+												</div>
+												<Typography className="shrink-0 text-sm font-semibold">
+													{formatMoney(row.amount)}
+												</Typography>
+											</label>
+										))}
+									</div>
+								</div>
+							)}
+
 							<TextField
-								label="Amount"
-								type="number"
-								value={amount}
-								onChange={(event) => setAmount(event.target.value)}
-								fullWidth
-							/>
-							<TextField
-								label="Note"
+								label="Reference"
 								value={note}
 								onChange={(event) => setNote(event.target.value)}
+								helperText="Transaction hash, payment method, or anything the partner should see."
 								fullWidth
 							/>
+
+							<div className="flex items-center justify-between">
+								<Typography color="text.secondary">Payout total</Typography>
+								<Typography className="text-2xl font-semibold tracking-tight">
+									{formatMoney(total)}
+								</Typography>
+							</div>
 						</DialogContent>
 						<DialogActions>
-							<Button onClick={() => setOpen(false)}>Cancel</Button>
+							<Button onClick={close}>Cancel</Button>
 							<Button
 								variant="contained"
 								color="secondary"
-								disabled={create.isPending || !partnerId || !amount}
+								disabled={create.isPending || !partnerId || selected.length === 0}
 								onClick={() =>
 									void create
-										.mutateAsync({ partnerId, amount: Number(amount), note, status: 'SENT' })
+										.mutateAsync({ partnerId, commissionIds: selected, note })
 										.then(() => {
 											enqueueSnackbar('Payout recorded', { variant: 'success' });
-											setOpen(false);
-											setAmount('');
-											setNote('');
+											close();
 										})
+										.catch((error: Error) => enqueueSnackbar(error.message, { variant: 'error' }))
 								}
 							>
-								Save
+								{selected.length ? `Pay ${formatMoney(total)}` : 'Pay'}
 							</Button>
 						</DialogActions>
 					</Dialog>

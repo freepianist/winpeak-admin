@@ -31,7 +31,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 			...(status ? { status: status as 'PENDING' | 'SENT' } : {}),
 			...(body.note !== undefined ? { note: String(body.note).trim() || null } : {})
 		},
-		include: { partner: { select: { name: true, email: true, code: true } } }
+		include: {
+			partner: { select: { name: true, email: true, code: true } },
+			_count: { select: { commissions: true } }
+		}
 	});
 
 	return Response.json(serializePayout(updated));

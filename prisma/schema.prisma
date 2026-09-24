@@ -498,20 +498,24 @@ model AffiliateCommission {
   amount      Decimal          @db.Decimal(18, 4)
   basisAmount Decimal          @default(0) @db.Decimal(18, 4)
   status      CommissionStatus @default(PENDING)
+  payoutId    String?
+  payout      AffiliatePayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
   createdAt   DateTime         @default(now())
 
   @@index([partnerId, createdAt(sort: Desc)])
   @@index([status])
+  @@index([payoutId])
 }
 
 model AffiliatePayout {
-  id        String           @id @default(cuid())
-  partnerId String
-  partner   AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
-  amount    Decimal          @db.Decimal(18, 4)
-  status    PayoutStatus     @default(PENDING)
-  note      String?
-  createdAt DateTime         @default(now())
+  id          String                @id @default(cuid())
+  partnerId   String
+  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  amount      Decimal               @db.Decimal(18, 4)
+  status      PayoutStatus          @default(PENDING)
+  note        String?
+  commissions AffiliateCommission[]
+  createdAt   DateTime              @default(now())
 
   @@index([partnerId, createdAt(sort: Desc)])
 }

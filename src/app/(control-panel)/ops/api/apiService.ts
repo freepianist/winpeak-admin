@@ -127,7 +127,7 @@ export const winpeakApi = {
 	updateCommission: (id: string, status: string) =>
 		unwrap(api.patch(`winpeak/affiliates/commissions/${id}`, { json: { status } }).json<AffiliateCommission>()),
 	getPayouts: () => unwrap(api.get('winpeak/affiliates/payouts').json<AffiliatePayout[]>()),
-	createPayout: (data: { partnerId: string; amount: number; note?: string; status?: string }) =>
+	createPayout: (data: { partnerId: string; commissionIds: string[]; note?: string }) =>
 		unwrap(api.post('winpeak/affiliates/payouts', { json: data }).json<AffiliatePayout>()),
 	updatePayout: (id: string, data: { status?: string; note?: string }) =>
 		unwrap(api.patch(`winpeak/affiliates/payouts/${id}`, { json: data }).json<AffiliatePayout>()),

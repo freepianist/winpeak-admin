@@ -293,6 +293,7 @@ export type AffiliateCommission = {
 	amount: number;
 	basisAmount: number;
 	status: CommissionStatus;
+	payoutId: string | null;
 	createdAt: string;
 };
 
@@ -305,6 +306,7 @@ export type AffiliatePayout = {
 	amount: number;
 	status: PayoutStatus;
 	note: string;
+	commissionCount: number;
 	createdAt: string;
 };
 

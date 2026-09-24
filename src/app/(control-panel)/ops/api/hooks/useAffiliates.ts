@@ -107,7 +107,7 @@ export const useCreatePayout = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (data: { partnerId: string; amount: number; note?: string; status?: string }) =>
+		mutationFn: (data: { partnerId: string; commissionIds: string[]; note?: string }) =>
 			winpeakApi.createPayout(data),
 		onSuccess: () => invalidateAffiliateQueries(queryClient)
 	});
