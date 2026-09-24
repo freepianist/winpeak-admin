@@ -1,4 +1,5 @@
-// Keep in sync with the public site prisma/schema.prisma
+// Keep in sync with the public site prisma/schema.prisma. Both apps share one
+// database, so a model missing here is a table `prisma db push` would drop.
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -26,6 +27,14 @@ enum LedgerKind {
 enum GameSource {
   scorpio
   oroplay
+}
+
+/// The lobby categories a game can fall under. Mirrors winpeak/prisma/schema.prisma.
+enum CatalogGameType {
+  slot
+  live
+  mini
+  fishing
 }
 
 /// A ledger entry's origin. `internal` covers money the casino moves itself, which
@@ -625,4 +634,44 @@ model ManualWallet {
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/// A studio the public site mirrors from an aggregator for its game lobby. The
+/// site owns these rows; the admin never reads them.
+model CatalogProvider {
+  source       GameSource
+  providerId   String
+  providerName String
+  slug         String
+  logo         String?
+  types        CatalogGameType[]
+  isActive     Boolean           @default(true)
+  syncedAt     DateTime          @default(now())
+
+  @@id([source, providerId])
+  @@index([slug])
+  @@index([isActive])
+}
+
+/// A game the public site mirrors from an aggregator for its game lobby.
+model CatalogGame {
+  id           String          @id
+  source       GameSource
+  providerId   String
+  providerName String
+  gameCode     String
+  title        String
+  image        String
+  gameType     CatalogGameType
+  slug         String
+  providerSlug String
+  searchText   String
+  isNew        Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  syncedAt     DateTime        @default(now())
+
+  @@index([isActive, gameType])
+  @@index([isActive, source, providerId])
+  @@index([providerSlug, slug])
+  @@index([searchText])
 }
