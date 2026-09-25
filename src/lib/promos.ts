@@ -28,19 +28,45 @@ export function previousUtcWeek(now = new Date()) {
 	};
 }
 
+/**
+ * The offer a market runs for a slot: its own if it has written one, otherwise
+ * the house offer that covers every market. A market with an offer of its own
+ * never sees the house copy for that slot, so pausing the market's offer falls
+ * back rather than leaving the slot empty.
+ */
 async function getOffer(
 	client: Client,
 	kind: "WELCOME" | "RELOAD" | "CASHBACK" | "REFERRAL",
-	depositNumber?: number | null
+	depositNumber?: number | null,
+	market?: string | null
 ) {
+	const slot = {
+		kind,
+		status: "ACTIVE" as const,
+		...(depositNumber ? { depositNumber } : {}),
+	};
+
+	if (market) {
+		const own = await client.promoOffer.findFirst({
+			where: { ...slot, market },
+			orderBy: { createdAt: "asc" },
+		});
+		if (own) return own;
+	}
+
 	return client.promoOffer.findFirst({
-		where: {
-			kind,
-			status: "ACTIVE",
-			...(depositNumber ? { depositNumber } : {}),
-		},
+		where: { ...slot, market: null },
 		orderBy: { createdAt: "asc" },
 	});
+}
+
+/** Which market's promotions a player is on. Null accounts run the house set. */
+async function marketOf(userId: string, client: Client = prisma) {
+	const user = await client.user.findUnique({
+		where: { id: userId },
+		select: { market: true },
+	});
+	return user?.market || null;
 }
 
 export async function getActiveBonus(userId: string, client: Client = prisma) {
@@ -187,6 +213,7 @@ async function grantMatchBonus(
 	depositAmount: number,
 	depositCount: number,
 	usdRate: number,
+	market: string | null,
 	client: Client
 ) {
 	const active = await client.playerBonus.findFirst({
@@ -200,7 +227,7 @@ async function grantMatchBonus(
 		return null;
 	}
 
-	const offer = await getOffer(client, kind, depositCount);
+	const offer = await getOffer(client, kind, depositCount, market);
 	if (!offer) return null;
 	if (depositAmount < money(offer.minDeposit) * usdRate) return null;
 
@@ -242,6 +269,7 @@ async function grantReferralRewards(
 	depositAmount: number,
 	isFirstDeposit: boolean,
 	usdRate: number,
+	market: string | null,
 	client: Client
 ) {
 	if (!isFirstDeposit) return null;
@@ -262,7 +290,10 @@ async function grantReferralRewards(
 	});
 	if (existing) return null;
 
-	const offer = await getOffer(client, "REFERRAL");
+	// The deposit that triggers the reward is the friend's, so the friend's
+	// market sets the terms; the amount is still paid at the referrer's rate,
+	// into the referrer's wallet.
+	const offer = await getOffer(client, "REFERRAL", null, market);
 	if (!offer) return null;
 	if (depositAmount < money(offer.minDeposit) * usdRate) return null;
 
@@ -298,8 +329,9 @@ export async function grantDepositPromos(
 	});
 	// Offers are set in USD; the deposit is in the wallet's currency.
 	const usdRate = await getUserUsdRate(userId, client);
-	await grantMatchBonus(userId, depositAmount, depositCount, usdRate, client);
-	await grantReferralRewards(userId, depositAmount, depositCount === 1, usdRate, client);
+	const market = await marketOf(userId, client);
+	await grantMatchBonus(userId, depositAmount, depositCount, usdRate, market, client);
+	await grantReferralRewards(userId, depositAmount, depositCount === 1, usdRate, market, client);
 }
 
 export async function applyWagerOnBet(
@@ -449,7 +481,7 @@ async function creditCashbackForUser(
 	periodEnd: Date,
 	client: Client = prisma
 ) {
-	const offer = await getOffer(client, "CASHBACK");
+	const offer = await getOffer(client, "CASHBACK", null, await marketOf(userId, client));
 	if (!offer) return null;
 
 	const existing = await client.cashbackPayout.findUnique({
@@ -598,24 +630,42 @@ export async function resolvePlayerReferrer(code?: string | null, excludeUserId?
 	return referrer?.id || null;
 }
 
-export async function listPublicOffers() {
+/**
+ * What a market advertises: its own offers, filled out with the house offers for
+ * the slots it has not written itself.
+ */
+export async function listPublicOffers(market: string | null = null) {
 	const offers = await prisma.promoOffer.findMany({
-		where: { status: "ACTIVE" },
+		where: {
+			status: "ACTIVE",
+			...(market ? { OR: [{ market }, { market: null }] } : { market: null }),
+		},
 		orderBy: [{ depositNumber: "asc" }, { createdAt: "asc" }],
 	});
+
+	// One offer per slot, matching what `getOffer` would actually grant: the
+	// market's own where it has one, the house copy otherwise.
+	const bySlot = new Map<string, (typeof offers)[number]>();
+	for (const offer of offers) {
+		const slot = `${offer.kind}:${offer.depositNumber ?? ""}`;
+		const chosen = bySlot.get(slot);
+		if (!chosen || (offer.market && !chosen.market)) bySlot.set(slot, offer);
+	}
+
 	const rank: Record<string, number> = {
 		WELCOME: 0,
 		RELOAD: 1,
 		CASHBACK: 2,
 		REFERRAL: 3,
 	};
-	return offers
+	return [...bySlot.values()]
 		.map(serializeOffer)
 		.sort((a, b) => (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9));
 }
 
 export function serializeOffer(offer: {
 	id: string;
+	market: string | null;
 	slug: string;
 	kind: string;
 	name: string;
@@ -633,6 +683,7 @@ export function serializeOffer(offer: {
 }) {
 	return {
 		id: offer.id,
+		market: offer.market,
 		slug: offer.slug,
 		kind: offer.kind,
 		name: offer.name,
@@ -653,6 +704,7 @@ export function serializeOffer(offer: {
 export async function getPlayerPromoState(userId: string) {
 	await maybeCreditWeeklyCashback(userId);
 	const referralCode = await ensureReferralCode(userId);
+	const market = await marketOf(userId);
 	const [bonus, referrals, latestCashback, offers] = await Promise.all([
 		getActiveBonus(userId),
 		prisma.referralReward.count({ where: { referrerId: userId } }),
@@ -660,7 +712,7 @@ export async function getPlayerPromoState(userId: string) {
 			where: { userId },
 			orderBy: { periodStart: "desc" },
 		}),
-		listPublicOffers(),
+		listPublicOffers(market),
 	]);
 
 	const welcome = offers.find((offer) => offer.kind === "WELCOME");
@@ -711,7 +763,7 @@ export function serializePlayerBonus(row: {
 	grantedAt: Date;
 	completedAt: Date | null;
 	note: string | null;
-	offer?: { name: string; kind: string };
+	offer?: { name: string; kind: string; market?: string | null };
 	user?: { firstName: string; lastName: string; email: string; wallet?: { currency: string } | null };
 }) {
 	return {
@@ -722,6 +774,7 @@ export function serializePlayerBonus(row: {
 		currency: row.user?.wallet?.currency || "USD",
 		offerId: row.offerId,
 		offerName: row.offer?.name || "",
+		offerMarket: row.offer?.market || null,
 		kind: row.offer?.kind || "",
 		status: row.status,
 		bonusAmount: money(row.bonusAmount),

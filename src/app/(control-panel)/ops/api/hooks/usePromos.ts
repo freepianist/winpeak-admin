@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { winpeakApi } from '../apiService';
 import { statsQueryKey } from './useWinPeakStats';
 import { playerQueryKey, playersQueryKey } from './usePlayers';
-import type { PromoOffer } from '../types';
+import type { NewPromoOffer, PromoOffer } from '../types';
 
 export const promosQueryKey = ['winpeak', 'promos'];
 
@@ -11,6 +11,26 @@ export const usePromos = () =>
 		queryFn: winpeakApi.getPromos,
 		queryKey: promosQueryKey
 	});
+
+export const useCreatePromo = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (data: NewPromoOffer) => winpeakApi.createPromo(data),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: promosQueryKey });
+		}
+	});
+};
+
+export const useDeletePromo = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: winpeakApi.deletePromo,
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: promosQueryKey });
+		}
+	});
+};
 
 export const useUpdatePromo = () => {
 	const queryClient = useQueryClient();

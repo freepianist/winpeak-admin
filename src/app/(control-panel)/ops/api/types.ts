@@ -416,6 +416,8 @@ export type PlayerBonusStatus = 'ACTIVE' | 'COMPLETED' | 'FORFEITED' | 'EXPIRED'
 
 export type PromoOffer = {
 	id: string;
+	/** ISO alpha-2 the offer runs on, or null for the house offer every market falls back to. */
+	market: string | null;
 	slug: string;
 	kind: PromoKind;
 	name: string;
@@ -440,6 +442,7 @@ export type PlayerBonus = {
 	currency: string;
 	offerId: string;
 	offerName: string;
+	offerMarket: string | null;
 	kind: string;
 	status: PlayerBonusStatus;
 	bonusAmount: number;
@@ -460,13 +463,43 @@ export type CashbackRunResult = {
 	periodEnd: string;
 };
 
+/** A market an offer can be filed under. `configured` is false once payment settings drop it. */
+export type PromoMarket = {
+	country: string;
+	currency: string;
+	/** Local currency units per 1 USD, for pricing an offer's USD amounts in the preview. */
+	fxRate: number;
+	enabled: boolean;
+	configured: boolean;
+};
+
 export type PromosPayload = {
 	offers: PromoOffer[];
 	bonuses: PlayerBonus[];
+	markets: PromoMarket[];
 	cashback: {
 		lastAmount: number;
 		lastCount: number;
 	};
+};
+
+/** Everything a new offer needs. The slug is derived from the name when left out. */
+export type NewPromoOffer = {
+	market: string | null;
+	kind: PromoKind;
+	name: string;
+	headline: string;
+	details: string;
+	slug?: string;
+	depositNumber?: number | null;
+	status?: PromoStatus;
+	matchPercent?: number;
+	maxAmount?: number;
+	minDeposit?: number;
+	wagerMultiplier?: number;
+	expireDays?: number;
+	maxBet?: number;
+	rewardAmount?: number;
 };
 
 export type BlockedCountry = {

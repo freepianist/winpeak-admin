@@ -21,6 +21,7 @@ import type {
 	SuccessStory,
 	WalletRequest,
 	WalletRequestSync,
+	NewPromoOffer,
 	PromoOffer,
 	PromosPayload,
 	PlayerBonus,
@@ -154,8 +155,11 @@ export const winpeakApi = {
 	updateStaff: (id: string, data: { name?: string; status?: string; password?: string }) =>
 		unwrap(api.patch(`winpeak/staff/${id}`, { json: data }).json<StaffMember>()),
 	getPromos: () => unwrap(api.get('winpeak/promos').json<PromosPayload>()),
+	createPromo: (data: NewPromoOffer) => unwrap(api.post('winpeak/promos', { json: data }).json<PromoOffer>()),
 	updatePromo: (data: Partial<PromoOffer> & { id: string }) =>
 		unwrap(api.patch('winpeak/promos', { json: data }).json<PromoOffer>()),
+	deletePromo: (id: string) =>
+		unwrap(api.delete('winpeak/promos', { searchParams: { id } }).json<{ success: boolean; id: string }>()),
 	runCashback: () => unwrap(api.post('winpeak/promos/cashback').json<CashbackRunResult>()),
 	forfeitBonus: (id: string) => unwrap(api.post(`winpeak/promos/bonuses/${id}/forfeit`).json<PlayerBonus>()),
 	getBlockedCountries: () => unwrap(api.get('winpeak/blocked-countries').json<BlockedCountry[]>()),

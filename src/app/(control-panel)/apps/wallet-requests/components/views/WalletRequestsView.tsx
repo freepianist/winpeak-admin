@@ -189,8 +189,7 @@ function WalletRequestsView() {
 												: undefined
 										}
 									>
-										{request.localCurrency}{' '}
-										{request.localAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+										{formatMoney(request.localAmount, request.localCurrency)}
 										{request.fxRate ? ` @ ${request.fxRate}` : ''}
 									</Typography>
 								) : null}

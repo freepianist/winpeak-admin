@@ -549,9 +549,19 @@ model AffiliatePayout {
   @@index([partnerId, createdAt(sort: Desc)])
 }
 
+/**
+ * Amounts are held in USD whatever the market, and priced into the player's
+ * currency at the rate their wallet runs on, the same way the payment floors
+ * are.
+ */
 model PromoOffer {
-  id              String        @id @default(cuid())
-  slug            String        @unique
+  id String @id @default(cuid())
+  /// The market (ISO alpha-2, as `User.market` spells it) this offer runs in.
+  /// Null is the house offer, which every market falls back to when it has none
+  /// of its own for the slot. Not a foreign key, so that it survives a market
+  /// being reconfigured, exactly like `User.market`.
+  market          String?
+  slug            String
   kind            PromoKind
   name            String
   headline        String
@@ -569,7 +579,11 @@ model PromoOffer {
   updatedAt       DateTime      @updatedAt
   bonuses         PlayerBonus[]
 
+  // Postgres counts nulls as distinct here, so the house set's slugs are kept
+  // unique by the partial index the migration adds alongside this one.
+  @@unique([market, slug])
   @@index([kind, status])
+  @@index([market, kind, status])
 }
 
 model PlayerBonus {
