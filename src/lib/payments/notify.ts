@@ -52,6 +52,11 @@ export async function notifyWalletOutcome(requestId: string, event: WalletOutcom
 				paymentOutcome: true,
 				payCurrency: true,
 				payoutAddress: true,
+				provider: true,
+				country: true,
+				channel: true,
+				localAmount: true,
+				localCurrency: true,
 				reviewNote: true,
 				reviewedAt: true,
 				user: {
@@ -70,7 +75,25 @@ export async function notifyWalletOutcome(requestId: string, event: WalletOutcom
 		const requested = money(request.amount);
 		const note = request.reviewNote;
 		const settledAt = formatDateTime(request.reviewedAt || new Date());
-		const network = request.payCurrency ? [{ label: 'Network', value: payCurrencyLabel(request.payCurrency) }] : [];
+		const network: PaymentFact[] =
+			request.provider === 'daypgl'
+				? [
+						{
+							label: 'Method',
+							value: `Local payment (${[request.country, request.channel].filter(Boolean).join(' · ')})`
+						},
+						...(request.localAmount != null && request.localCurrency
+							? [
+									{
+										label: 'Local amount',
+										value: `${request.localCurrency} ${money(request.localAmount).toFixed(2)}`
+									}
+								]
+							: [])
+					]
+				: request.payCurrency
+					? [{ label: 'Network', value: payCurrencyLabel(request.payCurrency) }]
+					: [];
 		const reference: PaymentFact = { label: 'Reference', value: request.id };
 
 		if (event.kind === 'deposit_credited') {

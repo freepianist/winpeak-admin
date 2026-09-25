@@ -395,7 +395,7 @@ function ActivityWidget({ entries, currency }: { entries: LedgerItem[]; currency
 								</Typography>
 							</div>
 							<div className="shrink-0 text-right">
-								<Typography className="font-semibold">{formatMoney(entry.amount, currency)}</Typography>
+								<Typography className="font-semibold">{formatMoney(entry.amount, entry.currency || currency)}</Typography>
 								<Typography
 									className="text-sm"
 									color="text.secondary"

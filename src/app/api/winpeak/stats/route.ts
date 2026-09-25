@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
+import { getUserUsdRates, toUsd } from '@/lib/pricing';
 import { requireAdmin, unauthorized } from '@/lib/admin-auth';
 import { serializeLedger, serializeUser } from '@/lib/serializers';
 
@@ -39,9 +40,9 @@ export async function GET() {
 			prisma.user.count(),
 			prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
 			prisma.user.count({ where: { status: 'SUSPENDED' } }),
-			prisma.wallet.findMany({ select: { balance: true, currency: true } }),
+			prisma.wallet.findMany({ select: { userId: true, balance: true, currency: true } }),
 			prisma.ledgerEntry.groupBy({
-				by: ['kind'],
+				by: ['userId', 'kind'],
 				_sum: { amount: true },
 				_count: true
 			}),
@@ -64,11 +65,13 @@ export async function GET() {
 			prisma.ledgerEntry.findMany({
 				orderBy: { createdAt: 'desc' },
 				take: 8,
-				include: { user: { select: { firstName: true, lastName: true, email: true } } }
+				include: {
+					user: { select: { firstName: true, lastName: true, email: true, wallet: { select: { currency: true } } } }
+				}
 			}),
 			prisma.ledgerEntry.findMany({
 				where: { createdAt: { gte: thirtyDaysAgo } },
-				select: { kind: true, amount: true, createdAt: true }
+				select: { userId: true, kind: true, amount: true, createdAt: true }
 			}),
 			prisma.walletRequest
 				.groupBy({
@@ -98,20 +101,25 @@ export async function GET() {
 			console.error('Affiliate stats unavailable', error);
 		}
 
+		// Wallets hold different currencies, so every total is priced in USD.
+		const rates = await getUserUsdRates(
+			wallets.filter((wallet) => wallet.currency.toUpperCase() !== 'USD').map((wallet) => wallet.userId)
+		);
+		const usd = (userId: string, amount: unknown) => toUsd(money(amount), rates.get(userId) ?? 1);
+
 		const totals: Record<string, { amount: number; count: number }> = {};
 
 		for (const row of ledgerByKind) {
-			totals[row.kind] = {
-				amount: money(row._sum.amount),
-				count: row._count
-			};
+			const total = (totals[row.kind] ||= { amount: 0, count: 0 });
+			total.amount += usd(row.userId, row._sum.amount);
+			total.count += row._count;
 		}
 
-		const deposits = totals.DEPOSIT?.amount || 0;
-		const withdrawals = totals.WITHDRAW?.amount || 0;
-		const bets = totals.BET?.amount || 0;
-		const wins = totals.WIN?.amount || 0;
-		const currency = wallets[0]?.currency || 'USD';
+		const deposits = money(totals.DEPOSIT?.amount || 0);
+		const withdrawals = money(totals.WITHDRAW?.amount || 0);
+		const bets = money(totals.BET?.amount || 0);
+		const wins = money(totals.WIN?.amount || 0);
+		const currency = 'USD';
 
 		const dayMap = new Map<string, { deposits: number; withdrawals: number; bets: number; wins: number }>();
 
@@ -130,7 +138,7 @@ export async function GET() {
 				continue;
 			}
 
-			const amount = money(entry.amount);
+			const amount = usd(entry.userId, entry.amount);
 
 			if (entry.kind === 'DEPOSIT') bucket.deposits += amount;
 
@@ -151,7 +159,7 @@ export async function GET() {
 				suspended: suspendedUsers
 			},
 			wallets: {
-				totalBalance: wallets.reduce((sum, wallet) => sum + money(wallet.balance), 0),
+				totalBalance: money(wallets.reduce((sum, wallet) => sum + usd(wallet.userId, wallet.balance), 0)),
 				currency
 			},
 			ledger: {

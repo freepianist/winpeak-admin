@@ -28,6 +28,11 @@ import type {
 	BlockedCountry,
 	PaymentSettings,
 	PaymentSettingsInput,
+	LocalPaymentSettings,
+	LocalPaymentSettingsInput,
+	GameAgentInput,
+	GameAgentSettings,
+	GameAgentTestResult,
 	SupportAction,
 	SupportConversation,
 	SupportConversationDetail,
@@ -127,7 +132,7 @@ export const winpeakApi = {
 	updateCommission: (id: string, status: string) =>
 		unwrap(api.patch(`winpeak/affiliates/commissions/${id}`, { json: { status } }).json<AffiliateCommission>()),
 	getPayouts: () => unwrap(api.get('winpeak/affiliates/payouts').json<AffiliatePayout[]>()),
-	createPayout: (data: { partnerId: string; amount: number; note?: string; status?: string }) =>
+	createPayout: (data: { partnerId: string; commissionIds: string[]; note?: string }) =>
 		unwrap(api.post('winpeak/affiliates/payouts', { json: data }).json<AffiliatePayout>()),
 	updatePayout: (id: string, data: { status?: string; note?: string }) =>
 		unwrap(api.patch(`winpeak/affiliates/payouts/${id}`, { json: data }).json<AffiliatePayout>()),
@@ -161,6 +166,14 @@ export const winpeakApi = {
 	getPaymentSettings: () => unwrap(api.get('winpeak/payment-settings').json<PaymentSettings>()),
 	updatePaymentSettings: (data: PaymentSettingsInput) =>
 		unwrap(api.patch('winpeak/payment-settings', { json: data }).json<PaymentSettings>()),
+	getLocalPaymentSettings: () => unwrap(api.get('winpeak/local-payments').json<LocalPaymentSettings>()),
+	updateLocalPaymentSettings: (data: LocalPaymentSettingsInput) =>
+		unwrap(api.patch('winpeak/local-payments', { json: data }).json<LocalPaymentSettings>()),
+	getGameAgents: () => unwrap(api.get('winpeak/game-agents').json<GameAgentSettings>()),
+	updateGameAgents: (agents: GameAgentInput[]) =>
+		unwrap(api.patch('winpeak/game-agents', { json: { agents } }).json<GameAgentSettings>()),
+	testGameAgent: (id: string) =>
+		unwrap(api.post('winpeak/game-agents/test', { json: { id } }).json<GameAgentTestResult>()),
 	getSupportConversations: (status?: string) =>
 		unwrap(
 			api.get(`winpeak/support/conversations${status ? `?status=${status}` : ''}`).json<SupportConversation[]>()

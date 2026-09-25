@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
+import { getUserUsdRates, toUsd, usdRateFor } from '@/lib/pricing';
 import type { AffiliateVisitType } from '@/app/(control-panel)/ops/api/types';
 
 export function trackingLink(code: string) {
@@ -20,7 +21,11 @@ export function maskEmail(email: string) {
 }
 
 export function makeAffiliateCode(name: string) {
-	const base = name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase() || 'AFF';
+	const base =
+		name
+			.replace(/[^a-zA-Z0-9]/g, '')
+			.slice(0, 6)
+			.toUpperCase() || 'AFF';
 	const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
 	return `${base}${suffix}`;
 }
@@ -82,6 +87,7 @@ export function serializeCommission(row: {
 	amount: { toString(): string } | number;
 	basisAmount: { toString(): string } | number;
 	status: string;
+	payoutId?: string | null;
 	createdAt: Date;
 	partner?: { name: string; email: string; code: string };
 	user?: { firstName: string; lastName: string; email: string } | null;
@@ -101,6 +107,7 @@ export function serializeCommission(row: {
 		amount: money(row.amount),
 		basisAmount: money(row.basisAmount),
 		status: row.status,
+		payoutId: row.payoutId || null,
 		createdAt: row.createdAt.toISOString()
 	};
 }
@@ -113,6 +120,7 @@ export function serializePayout(row: {
 	note: string | null;
 	createdAt: Date;
 	partner?: { name: string; email: string; code: string };
+	_count?: { commissions: number };
 }) {
 	return {
 		id: row.id,
@@ -123,6 +131,7 @@ export function serializePayout(row: {
 		amount: money(row.amount),
 		status: row.status,
 		note: row.note || '',
+		commissionCount: row._count?.commissions ?? 0,
 		createdAt: row.createdAt.toISOString()
 	};
 }
@@ -331,8 +340,7 @@ async function getClickSeries(partnerId: string, days = 14) {
 	since.setUTCHours(0, 0, 0, 0);
 	since.setUTCDate(since.getUTCDate() - (days - 1));
 
-	const rows = await prisma
-		.$queryRaw<{ day: string; clicks: number; uniqueClicks: number }[]>`
+	const rows = await prisma.$queryRaw<{ day: string; clicks: number; uniqueClicks: number }[]>`
 			SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day,
 			       COUNT(*)::int AS clicks,
 			       COUNT(DISTINCT "visitorKey")::int AS "uniqueClicks"
@@ -340,8 +348,7 @@ async function getClickSeries(partnerId: string, days = 14) {
 			WHERE "partnerId" = ${partnerId} AND "createdAt" >= ${since}
 			GROUP BY 1
 			ORDER BY 1
-		`
-		.catch((): { day: string; clicks: number; uniqueClicks: number }[] => []);
+		`.catch((): { day: string; clicks: number; uniqueClicks: number }[] => []);
 
 	const byDay = new Map(rows.map((row) => [String(row.day).slice(0, 10), row]));
 
@@ -383,22 +390,32 @@ export async function getPartnerBook(partnerId: string) {
 	let wins = 0;
 
 	if (playerIds.length) {
-		const rows = await prisma.ledgerEntry.groupBy({
-			by: ['kind'],
-			where: { userId: { in: playerIds }, kind: { in: ['BET', 'WIN'] } },
-			_sum: { amount: true }
-		});
+		// Wallets differ in currency, so each player's play is priced in USD (at
+		// today's market rate) before it is added up against a USD deal.
+		const [rows, rates] = await Promise.all([
+			prisma.ledgerEntry.groupBy({
+				by: ['userId', 'kind'],
+				where: { userId: { in: playerIds }, kind: { in: ['BET', 'WIN'] } },
+				_sum: { amount: true }
+			}),
+			getUserUsdRates(playerIds)
+		]);
 
 		for (const row of rows) {
-			if (row.kind === 'BET') bets = money(row._sum.amount);
-			if (row.kind === 'WIN') wins = money(row._sum.amount);
+			const usd = toUsd(money(row._sum.amount), rates.get(row.userId) ?? 1);
+
+			if (row.kind === 'BET') bets += usd;
+
+			if (row.kind === 'WIN') wins += usd;
 		}
+
+		bets = money(bets);
+		wins = money(wins);
 	}
 
 	const ggr = Math.max(0, bets - wins);
 	const revSharePercent = money(partner.revSharePercent);
-	const estimatedRevShare =
-		partner.dealType === 'CPA' ? 0 : Number(((ggr * revSharePercent) / 100).toFixed(4));
+	const estimatedRevShare = partner.dealType === 'CPA' ? 0 : Number(((ggr * revSharePercent) / 100).toFixed(4));
 
 	const [commissionRows, payoutSum, clickTotals, clicks, clickSeries] = await Promise.all([
 		prisma.affiliateCommission.groupBy({
@@ -410,8 +427,7 @@ export async function getPartnerBook(partnerId: string) {
 			where: { partnerId },
 			_sum: { amount: true }
 		}),
-		prisma
-			.$queryRaw<{ clicks: number; uniqueClicks: number; refreshClicks: number }[]>`
+		prisma.$queryRaw<{ clicks: number; uniqueClicks: number; refreshClicks: number }[]>`
 				SELECT
 					COUNT(*)::int AS clicks,
 					COUNT(DISTINCT "visitorKey")::int AS "uniqueClicks",
@@ -435,9 +451,13 @@ export async function getPartnerBook(partnerId: string) {
 		const amount = money(row._sum.amount);
 
 		if (row.kind === 'CPA') bookedCpa += amount;
+
 		if (row.kind === 'REVSHARE') bookedRevShare += amount;
+
 		if (row.status === 'PENDING') pending += amount;
+
 		if (row.status === 'APPROVED') approved += amount;
+
 		if (row.status === 'PAID') paid += amount;
 	}
 
@@ -473,11 +493,14 @@ export async function getPartnerBook(partnerId: string) {
 	};
 }
 
-export async function accrueAffiliateCpa(userId: string, depositAmount: number) {
+/** `walletAmount` is in the player's wallet currency; partner deals are in USD. */
+export async function accrueAffiliateCpa(userId: string, walletAmount: number) {
 	const user = await prisma.user.findUnique({
 		where: { id: userId },
-		include: { referredBy: true }
+		include: { referredBy: true, wallet: { select: { currency: true } } }
 	});
+
+	const depositAmount = toUsd(walletAmount, await usdRateFor(user?.market, user?.wallet?.currency));
 
 	if (!user || user.firstDepositAt) {
 		return;

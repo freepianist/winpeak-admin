@@ -40,7 +40,8 @@ function FuseTheme(props: FuseThemeProps) {
 
 	const baseStyles = {
 		'& .MuiOutlinedInput-root': {
-			backgroundColor: theme.vars.palette.common.background
+			backgroundColor:
+				theme.palette.mode === 'light' ? theme.vars.palette.common.background : 'rgba(255, 255, 255, 0.04)'
 		},
 		'& .border-divider ': {
 			borderColor: `${theme.vars.palette.divider}!important`

@@ -33,7 +33,7 @@ export async function POST(_request: Request, context: RouteContext) {
 		where: { id },
 		include: {
 			offer: { select: { name: true, kind: true } },
-			user: { select: { firstName: true, lastName: true, email: true } }
+			user: { select: { firstName: true, lastName: true, email: true, wallet: { select: { currency: true } } } }
 		}
 	});
 

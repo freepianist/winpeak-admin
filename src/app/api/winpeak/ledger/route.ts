@@ -21,7 +21,9 @@ export async function GET(request: Request) {
 		},
 		orderBy: { createdAt: 'desc' },
 		take: 2000,
-		include: { user: { select: { firstName: true, lastName: true, email: true } } }
+		include: {
+			user: { select: { firstName: true, lastName: true, email: true, wallet: { select: { currency: true } } } }
+		}
 	});
 
 	return Response.json(entries.map(serializeLedger));

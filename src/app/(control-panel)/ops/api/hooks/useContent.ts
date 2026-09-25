@@ -20,8 +20,7 @@ export const useStory = (id: string) =>
 		enabled: Boolean(id) && id !== 'new'
 	});
 export const useInbox = () => useQuery({ queryFn: winpeakApi.getInbox, queryKey: inboxQueryKey });
-export const useSubscribers = () =>
-	useQuery({ queryFn: winpeakApi.getSubscribers, queryKey: subscribersQueryKey });
+export const useSubscribers = () => useQuery({ queryFn: winpeakApi.getSubscribers, queryKey: subscribersQueryKey });
 export const useGames = () => useQuery({ queryFn: winpeakApi.getGames, queryKey: gamesQueryKey });
 
 export const useDeleteComments = () => {

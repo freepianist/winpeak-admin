@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
+import { getUserUsdRate } from "@/lib/pricing";
 
 type Client = Prisma.TransactionClient | typeof prisma;
 
@@ -185,6 +186,7 @@ async function grantMatchBonus(
 	userId: string,
 	depositAmount: number,
 	depositCount: number,
+	usdRate: number,
 	client: Client
 ) {
 	const active = await client.playerBonus.findFirst({
@@ -200,10 +202,13 @@ async function grantMatchBonus(
 
 	const offer = await getOffer(client, kind, depositCount);
 	if (!offer) return null;
-	if (depositAmount < money(offer.minDeposit)) return null;
+	if (depositAmount < money(offer.minDeposit) * usdRate) return null;
 
 	const matched = roundCash(
-		Math.min(money(offer.maxAmount), (depositAmount * money(offer.matchPercent)) / 100)
+		Math.min(
+			money(offer.maxAmount) * usdRate,
+			(depositAmount * money(offer.matchPercent)) / 100
+		)
 	);
 	if (matched <= 0) return null;
 
@@ -236,6 +241,7 @@ async function grantReferralRewards(
 	userId: string,
 	depositAmount: number,
 	isFirstDeposit: boolean,
+	usdRate: number,
 	client: Client
 ) {
 	if (!isFirstDeposit) return null;
@@ -258,16 +264,17 @@ async function grantReferralRewards(
 
 	const offer = await getOffer(client, "REFERRAL");
 	if (!offer) return null;
-	if (depositAmount < money(offer.minDeposit)) return null;
-
-	const amount = roundCash(money(offer.rewardAmount));
-	if (amount <= 0) return null;
+	if (depositAmount < money(offer.minDeposit) * usdRate) return null;
 
 	const referrer = await client.user.findUnique({
 		where: { id: user.referredByUserId },
 		select: { id: true, status: true },
 	});
 	if (!referrer || referrer.status !== "ACTIVE") return null;
+
+	// Paid into the referrer's wallet, so in the referrer's currency.
+	const amount = roundCash(money(offer.rewardAmount) * (await getUserUsdRate(referrer.id, client)));
+	if (amount <= 0) return null;
 
 	await client.referralReward.create({
 		data: {
@@ -289,8 +296,10 @@ export async function grantDepositPromos(
 	const depositCount = await client.ledgerEntry.count({
 		where: { userId, kind: "DEPOSIT" },
 	});
-	await grantMatchBonus(userId, depositAmount, depositCount, client);
-	await grantReferralRewards(userId, depositAmount, depositCount === 1, client);
+	// Offers are set in USD; the deposit is in the wallet's currency.
+	const usdRate = await getUserUsdRate(userId, client);
+	await grantMatchBonus(userId, depositAmount, depositCount, usdRate, client);
+	await grantReferralRewards(userId, depositAmount, depositCount === 1, usdRate, client);
 }
 
 export async function applyWagerOnBet(
@@ -300,8 +309,9 @@ export async function applyWagerOnBet(
 ) {
 	const bonus = await getActiveBonus(userId, client);
 	if (!bonus) return null;
-	if (betAmount > money(bonus.offer.maxBet) && money(bonus.offer.maxBet) > 0) {
-		return { maxBetExceeded: true as const, maxBet: money(bonus.offer.maxBet), bonus };
+	const maxBet = money(bonus.offer.maxBet) * (await getUserUsdRate(userId, client));
+	if (betAmount > maxBet && maxBet > 0) {
+		return { maxBetExceeded: true as const, maxBet, bonus };
 	}
 
 	const remaining = Math.max(0, money(bonus.wagerRemaining) - betAmount);
@@ -468,9 +478,10 @@ async function creditCashbackForUser(
 	]);
 
 	const netLoss = money(bets._sum.amount) - money(wins._sum.amount);
-	if (netLoss < 1) return null;
+	const usdRate = await getUserUsdRate(userId, client);
+	if (netLoss < usdRate) return null;
 
-	const cap = money(offer.maxAmount) || money(offer.rewardAmount);
+	const cap = (money(offer.maxAmount) || money(offer.rewardAmount)) * usdRate;
 	const amount = roundCash(Math.min(cap, (netLoss * money(offer.matchPercent)) / 100));
 	if (amount < 0.01) return null;
 
@@ -701,13 +712,14 @@ export function serializePlayerBonus(row: {
 	completedAt: Date | null;
 	note: string | null;
 	offer?: { name: string; kind: string };
-	user?: { firstName: string; lastName: string; email: string };
+	user?: { firstName: string; lastName: string; email: string; wallet?: { currency: string } | null };
 }) {
 	return {
 		id: row.id,
 		userId: row.userId,
 		playerName: row.user ? `${row.user.firstName} ${row.user.lastName}`.trim() : "",
 		playerEmail: row.user?.email || "",
+		currency: row.user?.wallet?.currency || "USD",
 		offerId: row.offerId,
 		offerName: row.offer?.name || "",
 		kind: row.offer?.kind || "",

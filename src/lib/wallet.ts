@@ -4,7 +4,18 @@ import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
 import { grantDepositPromos } from '@/lib/promos';
 import { notifyWalletOutcome } from '@/lib/payments/notify';
+import { payoutUsd } from '@/lib/pricing';
 import { createPayout, estimateCryptoAmount, isPayoutConfigured } from '@/lib/payments/nowpayments';
+import {
+	createPayout as createLocalPayout,
+	DaypglError,
+	DaypglNoAnswerError,
+	formatLocalAmount,
+	getMerchantBalance,
+	isDaypglConfigured,
+	queryPayin,
+	queryPayout
+} from '@/lib/payments/daypgl';
 import {
 	createConversion,
 	getAvailableBalance,
@@ -40,7 +51,12 @@ export function availableBalance(wallet: {
 	return money(wallet.balance) - money(wallet.heldBalance ?? 0);
 }
 
-export async function applyDeposit(userId: string, amount: number, tx?: Prisma.TransactionClient) {
+export async function applyDeposit(
+	userId: string,
+	amount: number,
+	tx?: Prisma.TransactionClient,
+	providerTxId?: string
+) {
 	if (amount <= 0) {
 		throw new Error('Deposit amount must be greater than 0');
 	}
@@ -62,7 +78,8 @@ export async function applyDeposit(userId: string, amount: number, tx?: Prisma.T
 				userId,
 				kind: 'DEPOSIT',
 				amount,
-				balanceAfter: next
+				balanceAfter: next,
+				providerTxId
 			}
 		});
 		await grantDepositPromos(userId, amount, client);
@@ -178,7 +195,19 @@ export async function approveWalletRequest(
 		throw new Error('Request is no longer pending');
 	}
 
-	const amount = money(request.amount);
+	if (request.type === 'WITHDRAW' && request.provider === 'daypgl') {
+		return approveLocalWithdraw(request, reviewedBy, reviewNote);
+	}
+
+	// The player pays DAYPGL, not the casino, so there is nothing for staff to
+	// check by hand. Approving asks DAYPGL and credits only what it confirms.
+	if (request.type === 'DEPOSIT' && request.provider === 'daypgl') {
+		const result = await syncLocalRequest(request, reviewedBy);
+		if (result.request.status !== 'APPROVED') {
+			throw new Error(result.message);
+		}
+		return result.request;
+	}
 
 	if (request.type === 'WITHDRAW') {
 		if (!request.payoutAddress) {
@@ -222,20 +251,21 @@ export async function approveWalletRequest(
 			process.env.NOWPAYMENTS_PAYOUT_CURRENCY ||
 			settlement
 		).toLowerCase();
+		const amountUsd = payoutUsd(request.amount, request.usdRate);
 
 		try {
 			// The treasury only holds the settlement coin, so a payout on another
 			// network has to be funded by a conversion first. Where one is needed
 			// the player site's scheduled tick finishes the payout once it settles.
 			if (destination !== settlement && !request.conversionId) {
-				const base = await estimateCryptoAmount(amount, destination);
+				const base = await estimateCryptoAmount(amountUsd, destination);
 				const fee = await payoutFee(destination, base);
 				const required = (base + fee) * (1 + getConversionBufferPct() / 100);
 				const available = await getAvailableBalance(destination);
 
 				if (available < required) {
 					const settlementNeeded =
-						(await estimateCryptoAmount(amount, settlement)) * (required / base);
+						(await estimateCryptoAmount(amountUsd, settlement)) * (required / base);
 					const settlementAvailable = await getAvailableBalance(settlement);
 
 					if (settlementAvailable < settlementNeeded) {
@@ -275,7 +305,7 @@ export async function approveWalletRequest(
 			}
 
 			const payout = await createPayout({
-				amountUsd: amount,
+				amountUsd,
 				address: request.payoutAddress,
 				currency: destination,
 				requestId: request.id
@@ -570,6 +600,10 @@ export async function syncWalletRequest(requestId: string, reviewedBy: string) {
 		throw new Error('Request not found');
 	}
 
+	if (request.provider === 'daypgl') {
+		return syncLocalRequest(request, reviewedBy);
+	}
+
 	if (request.type !== 'WITHDRAW') {
 		throw new Error('Only crypto withdrawals need syncing. Deposits settle from the invoice IPN.');
 	}
@@ -753,6 +787,296 @@ export async function syncWalletRequest(requestId: string, reviewedBy: string) {
 		request: updated,
 		changed: true,
 		message: 'Nothing was submitted to NOWPayments. Returned to pending so you can approve or reject it.'
+	};
+}
+
+type WalletRequestRow = NonNullable<Awaited<ReturnType<typeof prisma.walletRequest.findUnique>>>;
+
+/** A payout DAYPGL did not clearly answer. It may exist, so it is only ever queried. */
+const LOCAL_SUBMITTED = 'daypgl_submitted';
+
+/**
+ * Sends a DAYPGL payout for a withdrawal staff approved. DAYPGL pays from a
+ * per-country merchant balance, so that is checked before anything is claimed.
+ * An unanswered create is left for the player site's tick to query rather than
+ * returned to pending, because approving it again could pay twice.
+ */
+async function approveLocalWithdraw(request: WalletRequestRow, reviewedBy: string, reviewNote?: string) {
+	if (!isDaypglConfigured()) {
+		throw new Error('DAYPGL is not configured in admin. Add the gateway URL, merchant id and secret key.');
+	}
+
+	const localAmount = request.localAmount == null ? 0 : Number(request.localAmount);
+	const currency = request.localCurrency || '';
+	if (!request.country || !request.channel || !request.payeeName || !request.payoutAddress || !(localAmount > 0)) {
+		throw new Error('This local withdrawal is missing its payout details. Reject it so the player can resubmit.');
+	}
+	if (request.providerRef || request.providerStatus === LOCAL_SUBMITTED) {
+		throw new Error('This payout was already submitted to DAYPGL. Use Sync to check on it.');
+	}
+
+	const balance = await getMerchantBalance(request.country);
+	if (balance.available < localAmount) {
+		throw new Error(
+			`DAYPGL ${request.country} balance is ${balance.available.toFixed(2)} ${balance.currency || currency} but this payout needs ${localAmount.toFixed(2)}. Top up before approving.`
+		);
+	}
+
+	const claimed = await prisma.walletRequest.updateMany({
+		where: { id: request.id, status: 'PENDING', providerRef: null },
+		data: {
+			status: 'PROCESSING',
+			reviewedBy,
+			reviewedAt: new Date(),
+			reviewNote: reviewNote?.trim() || 'Local payout submitted',
+			providerStatus: 'submitting'
+		}
+	});
+	if (!claimed.count) {
+		throw new Error('Request is no longer pending');
+	}
+
+	try {
+		const payout = await createLocalPayout({
+			requestId: request.id,
+			country: request.country,
+			bankCode: request.channel,
+			localAmount: formatLocalAmount(localAmount, currency),
+			payeeName: request.payeeName,
+			payeeAccount: request.payoutAddress,
+			userId: request.userId
+		});
+		const providerStatus = `daypgl:${payout.rawStatus || payout.status}`;
+
+		if (payout.status === 'failed') {
+			return finalizeSyncedWithdraw(request.id, reviewedBy, 'failed', providerStatus, 'DAYPGL refused the payout');
+		}
+		if (payout.status === 'success') {
+			return finalizeSyncedWithdraw(request.id, reviewedBy, 'paid', providerStatus, 'Local payout sent');
+		}
+
+		return prisma.walletRequest.update({
+			where: { id: request.id },
+			data: { providerRef: payout.tradeNo || null, providerStatus },
+			include: WITH_PLAYER
+		});
+	} catch (error) {
+		if (error instanceof DaypglNoAnswerError || (error instanceof DaypglError && error.status >= 500)) {
+			return prisma.walletRequest.update({
+				where: { id: request.id },
+				data: {
+					providerStatus: LOCAL_SUBMITTED,
+					reviewNote: 'DAYPGL did not confirm the payout. It is checked automatically; use Sync to check now.'
+				},
+				include: WITH_PLAYER
+			});
+		}
+
+		await prisma.walletRequest.update({
+			where: { id: request.id },
+			data: {
+				status: 'PENDING',
+				providerStatus: 'failed',
+				reviewNote: error instanceof Error ? error.message : 'Payout failed'
+			}
+		});
+		throw error;
+	}
+}
+
+/**
+ * Credits a DAYPGL deposit that a query found paid. Mirrors the player site's
+ * callback settlement, keyed on the same payment id, so whichever of the two
+ * gets there first credits and the other finds nothing left to do.
+ */
+async function creditLocalDeposit(
+	requestId: string,
+	order: { tradeNo: string; actualAmount: number; rawStatus: string },
+	reviewedBy: string
+) {
+	const paymentKey = `daypgl:${order.tradeNo || requestId}`;
+
+	const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+		const latest = await lockWalletRequest(tx, requestId);
+		if (!latest || latest.type !== 'DEPOSIT' || latest.status !== 'PENDING') {
+			return { credited: 0, userId: '' };
+		}
+
+		const existing = await tx.depositPayment.findUnique({ where: { paymentId: paymentKey } });
+		if (existing && money(existing.creditedAmount) > 0) {
+			return { credited: 0, userId: '' };
+		}
+
+		const requested = money(latest.amount);
+		const rate = latest.fxRate == null ? 0 : Number(latest.fxRate);
+		const paidUsd =
+			order.actualAmount > 0 && rate > 0 ? Math.round((order.actualAmount / rate) * 100) / 100 : requested;
+		if (paidUsd < 0.01) {
+			return { credited: 0, userId: '' };
+		}
+
+		const providerStatus = `daypgl:${order.rawStatus || 'success'}`;
+		await applyDeposit(latest.userId, paidUsd, tx, `dp:${paymentKey}`);
+		await tx.depositPayment.upsert({
+			where: { paymentId: paymentKey },
+			create: {
+				requestId,
+				paymentId: paymentKey,
+				paidAmount: order.actualAmount || null,
+				creditedAmount: paidUsd,
+				providerStatus
+			},
+			update: { paidAmount: order.actualAmount || null, creditedAmount: paidUsd, providerStatus }
+		});
+
+		const outcome = classifyManualCredit(paidUsd, requested);
+		await tx.walletRequest.update({
+			where: { id: requestId },
+			data: {
+				status: 'APPROVED',
+				providerStatus,
+				providerRef: latest.providerRef || order.tradeNo || null,
+				paidAmount: order.actualAmount || null,
+				creditedAmount: paidUsd,
+				paymentOutcome: outcome,
+				reviewedBy,
+				reviewedAt: new Date(),
+				reviewNote:
+					outcome === 'EXACT'
+						? 'Paid at DAYPGL, confirmed by sync'
+						: `Paid at DAYPGL — $${paidUsd.toFixed(2)} credited of $${requested.toFixed(2)} requested`
+			}
+		});
+		return { credited: paidUsd, userId: latest.userId };
+	}, TX);
+
+	if (result.credited > 0) {
+		try {
+			await accrueAffiliateCpa(result.userId, result.credited);
+		} catch (error) {
+			console.error('Affiliate CPA accrual failed', error);
+		}
+		await notifyWalletOutcome(requestId, { kind: 'deposit_credited', credited: result.credited });
+	}
+
+	return result.credited;
+}
+
+/** Asks DAYPGL what became of a local deposit or payout and writes that down. */
+async function syncLocalRequest(request: WalletRequestRow, reviewedBy: string) {
+	if (request.status === 'APPROVED' || request.status === 'REJECTED') {
+		throw new Error(`This request is already ${request.status.toLowerCase()}`);
+	}
+	if (!isDaypglConfigured()) {
+		throw new Error('DAYPGL is not configured in admin. Add the gateway URL, merchant id and secret key.');
+	}
+	if (!request.country) {
+		throw new Error('This request has no country recorded, so there is nothing to ask DAYPGL about.');
+	}
+
+	const current = () => prisma.walletRequest.findUniqueOrThrow({ where: { id: request.id }, include: WITH_PLAYER });
+
+	if (request.type === 'DEPOSIT') {
+		let order: Awaited<ReturnType<typeof queryPayin>>;
+		try {
+			order = await queryPayin(request.country, request.id);
+		} catch (error) {
+			if (error instanceof DaypglError && error.status === 404) {
+				return {
+					request: await current(),
+					changed: false,
+					message: 'DAYPGL has no order for this deposit, so the checkout never opened. Safe to reject.'
+				};
+			}
+			throw error;
+		}
+
+		if (order.status === 'success') {
+			const credited = await creditLocalDeposit(request.id, order, reviewedBy);
+			return {
+				request: await current(),
+				changed: credited > 0,
+				message:
+					credited > 0
+						? `Paid at DAYPGL. $${credited.toFixed(2)} credited to the player.`
+						: 'Paid at DAYPGL and already credited.'
+			};
+		}
+
+		if (order.status === 'failed') {
+			const updated = await rejectWalletRequest(request.id, reviewedBy, `Local payment ${order.rawStatus || 'failed'} at DAYPGL`);
+			return { request: updated, changed: true, message: `DAYPGL reports the payment ${order.rawStatus || 'failed'}. Closed as declined.` };
+		}
+
+		const updated = await recordSyncProgress(request.id, {
+			providerStatus: `daypgl:${order.rawStatus || 'pending'}`
+		});
+		return { request: updated, changed: false, message: `Still ${order.rawStatus || 'pending'} at DAYPGL. Nothing to credit yet.` };
+	}
+
+	if (request.status !== 'PROCESSING') {
+		return {
+			request: await current(),
+			changed: false,
+			message: 'Nothing has been sent to DAYPGL for this withdrawal. Approve or reject it.'
+		};
+	}
+
+	let order: Awaited<ReturnType<typeof queryPayout>>;
+	try {
+		order = await queryPayout(request.country, request.id);
+	} catch (error) {
+		if (error instanceof DaypglError && error.status === 404 && !request.providerRef) {
+			if (Date.now() - request.updatedAt.getTime() < CLAIM_TTL_MS) {
+				return {
+					request: await current(),
+					changed: false,
+					message: 'This payout was picked up moments ago and may still be submitting. Try again in a few minutes.'
+				};
+			}
+			const updated = await recordSyncProgress(request.id, {
+				status: 'PENDING',
+				autoProcessed: false,
+				providerStatus: 'needs_review',
+				reviewNote: 'No payout reached DAYPGL — safe to approve or reject'
+			});
+			return {
+				request: updated,
+				changed: true,
+				message: 'DAYPGL has no payout for this request. Returned to pending so you can approve or reject it.'
+			};
+		}
+		throw error;
+	}
+
+	const providerStatus = `daypgl:${order.rawStatus || order.status}`;
+	if (order.status === 'success') {
+		const updated = await finalizeSyncedWithdraw(request.id, reviewedBy, 'paid', providerStatus, 'Local payout confirmed by DAYPGL');
+		return { request: updated, changed: true, message: 'Payout finished. Balance debited and the hold released.' };
+	}
+	if (order.status === 'failed') {
+		const updated = await finalizeSyncedWithdraw(
+			request.id,
+			reviewedBy,
+			'failed',
+			providerStatus,
+			order.failReason ? `Local payout failed: ${order.failReason}` : 'Local payout failed at DAYPGL'
+		);
+		return {
+			request: updated,
+			changed: true,
+			message: "Payout failed at DAYPGL. The hold was released and the funds are back in the player's balance."
+		};
+	}
+
+	const updated = await recordSyncProgress(request.id, {
+		providerStatus,
+		providerRef: request.providerRef || order.tradeNo || null
+	});
+	return {
+		request: updated,
+		changed: request.providerStatus !== providerStatus,
+		message: `Payout is ${order.rawStatus || 'pending'} at DAYPGL. Nothing to settle yet.`
 	};
 }
 

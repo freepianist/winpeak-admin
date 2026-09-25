@@ -80,12 +80,12 @@ function LedgerView() {
 			{
 				accessorKey: 'amount',
 				header: 'Amount',
-				Cell: ({ cell }) => formatMoney(cell.getValue<number>())
+				Cell: ({ cell, row }) => formatMoney(cell.getValue<number>(), row.original.currency)
 			},
 			{
 				accessorKey: 'balanceAfter',
 				header: 'Balance after',
-				Cell: ({ cell }) => formatMoney(cell.getValue<number>())
+				Cell: ({ cell, row }) => formatMoney(cell.getValue<number>(), row.original.currency)
 			},
 			{
 				accessorKey: 'gameCode',

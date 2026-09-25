@@ -172,6 +172,46 @@ function WalletRequestsView() {
 				header: 'Destination',
 				Cell: ({ row }) => {
 					const request = row.original;
+
+					if (request.provider === 'daypgl') {
+						return (
+							<div>
+								<Typography className="text-sm">
+									Local · {[request.country, request.channel].filter(Boolean).join(' · ')}
+								</Typography>
+								{request.localAmount != null ? (
+									<Typography
+										className="text-sm"
+										color="text.secondary"
+										title={
+											request.fxRate
+												? `${request.fxRate} ${request.localCurrency} per ${request.currency}`
+												: undefined
+										}
+									>
+										{request.localCurrency}{' '}
+										{request.localAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+										{request.fxRate ? ` @ ${request.fxRate}` : ''}
+									</Typography>
+								) : null}
+								{request.type === 'WITHDRAW' && request.payoutAddress ? (
+									<CopyableRef
+										value={request.payoutAddress}
+										label={request.payeeName ? `Account (${request.payeeName})` : 'Account'}
+									/>
+								) : null}
+								{request.autoProcessed ? (
+									<Chip
+										size="small"
+										label="auto"
+										variant="outlined"
+										sx={{ mt: 0.5 }}
+									/>
+								) : null}
+							</div>
+						);
+					}
+
 					// On the manual rail a deposit's useful reference is the transaction
 					// the player says they sent, since that is what gets checked on-chain
 					// before crediting. A withdrawal's is still the address to pay.
@@ -185,6 +225,16 @@ function WalletRequestsView() {
 					return (
 						<div>
 							<Typography className="text-sm">{request.payCurrency || '—'}</Typography>
+							{request.usdRate != null ? (
+								<Typography
+									className="text-sm"
+									color="text.secondary"
+									title={`${request.usdRate} ${request.currency} per USD`}
+								>
+									{formatMoney(request.amountUsd, 'USD')}
+									{request.type === 'WITHDRAW' ? ' to send' : ' invoiced'}
+								</Typography>
+							) : null}
 							{reference.value ? (
 								<CopyableRef
 									value={reference.value}
@@ -272,6 +322,37 @@ function WalletRequestsView() {
 				Cell: ({ row }) => {
 					const request = row.original;
 					const manualWithdraw = request.manual && request.type === 'WITHDRAW';
+					const local = request.provider === 'daypgl';
+					const providerName = local ? 'DAYPGL' : 'NOWPayments';
+
+					const syncButton = (
+						<Button
+							size="small"
+							disabled={sync.isPending}
+							title={
+								request.type === 'DEPOSIT'
+									? `Ask ${providerName} whether this deposit was paid and credit it if so`
+									: `Ask ${providerName} what happened to this payout and settle it accordingly`
+							}
+							onClick={() =>
+								void sync
+									.mutateAsync({ id: request.id })
+									.then((result) =>
+										enqueueSnackbar(result.syncMessage, {
+											variant: result.syncChanged ? 'success' : 'info',
+											autoHideDuration: 8000
+										})
+									)
+									.catch((error: unknown) =>
+										enqueueSnackbar(error instanceof Error ? error.message : 'Could not sync', {
+											variant: 'error'
+										})
+									)
+							}
+						>
+							Sync
+						</Button>
+					);
 
 					// Available whatever the status: a settled request is the one staff
 					// come back to when a player disputes it.
@@ -298,7 +379,11 @@ function WalletRequestsView() {
 											? 'Send the coins from the casino wallet first — this only records that you did, and debits the player'
 											: request.manual
 												? 'Check the transaction on-chain first — you will enter the USD that actually arrived'
-												: undefined
+												: local && request.type === 'WITHDRAW'
+													? `Sends ${request.localCurrency || ''} ${request.localAmount ?? ''} to the player's account through DAYPGL`
+													: local
+														? 'Checks with DAYPGL and credits only if the payment is confirmed'
+														: undefined
 									}
 									onClick={() => {
 										if (request.manual && request.type === 'DEPOSIT') {
@@ -345,6 +430,7 @@ function WalletRequestsView() {
 								>
 									Reject
 								</Button>
+								{local && request.type === 'DEPOSIT' ? syncButton : null}
 							</div>
 						);
 					}
@@ -356,29 +442,7 @@ function WalletRequestsView() {
 						return (
 							<div className="flex items-center gap-1">
 								{detailsButton}
-								<Button
-									size="small"
-									disabled={sync.isPending}
-									title="Ask NOWPayments what happened to this payout and settle it accordingly"
-									onClick={() =>
-										void sync
-											.mutateAsync({ id: request.id })
-											.then((result) =>
-												enqueueSnackbar(result.syncMessage, {
-													variant: result.syncChanged ? 'success' : 'info',
-													autoHideDuration: 8000
-												})
-											)
-											.catch((error: unknown) =>
-												enqueueSnackbar(
-													error instanceof Error ? error.message : 'Could not sync',
-													{ variant: 'error' }
-												)
-											)
-									}
-								>
-									Sync
-								</Button>
+								{syncButton}
 							</div>
 						);
 					}
@@ -402,7 +466,7 @@ function WalletRequestsView() {
 					subtitle={
 						settings?.manualMode
 							? 'Manual mode is on, so nothing settles itself. Check every deposit on-chain before approving, and send a payout from the casino wallet before marking it paid.'
-							: 'Deposits credit after on-chain payment. Withdrawals within auto limits are sent immediately; the rest wait here. If a payout is stuck on Processing, use Sync to reconcile it against NOWPayments.'
+							: 'Deposits credit once the payment provider confirms them. Withdrawals within auto limits are sent immediately; the rest wait here. If a payout is stuck on Processing, use Sync to reconcile it with NOWPayments or DAYPGL.'
 					}
 				/>
 			}

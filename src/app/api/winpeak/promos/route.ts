@@ -19,7 +19,7 @@ export async function GET() {
 			take: 100,
 			include: {
 				offer: { select: { name: true, kind: true } },
-				user: { select: { firstName: true, lastName: true, email: true } }
+				user: { select: { firstName: true, lastName: true, email: true, wallet: { select: { currency: true } } } }
 			}
 		}),
 		prisma.cashbackPayout.aggregate({

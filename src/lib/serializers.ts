@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { money } from '@/lib/money';
+import { payoutUsd } from '@/lib/pricing';
 import { availableBalance } from '@/lib/wallet';
 
 export type BlogBody = {
@@ -109,13 +110,14 @@ export function serializeLedger(entry: {
 	providerId: string | null;
 	gameCode: string | null;
 	createdAt: Date;
-	user?: { firstName: string; lastName: string; email: string };
+	user?: { firstName: string; lastName: string; email: string; wallet?: { currency: string } | null };
 }) {
 	return {
 		id: entry.id,
 		userId: entry.userId,
 		playerName: entry.user ? `${entry.user.firstName} ${entry.user.lastName}`.trim() : '',
 		playerEmail: entry.user?.email || '',
+		currency: entry.user?.wallet?.currency || 'USD',
 		providerTxId: entry.providerTxId,
 		referenceId: entry.referenceId,
 		roundId: entry.roundId,
@@ -154,6 +156,14 @@ export function serializeWalletRequest(row: {
 	paidAmount?: { toString(): string } | number | null;
 	creditedAmount?: { toString(): string } | number | null;
 	paymentOutcome?: string | null;
+	provider?: string | null;
+	country?: string | null;
+	localCurrency?: string | null;
+	localAmount?: { toString(): string } | number | null;
+	fxRate?: { toString(): string } | number | null;
+	usdRate?: { toString(): string } | number | null;
+	channel?: string | null;
+	payeeName?: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	user?: {
@@ -191,6 +201,15 @@ export function serializeWalletRequest(row: {
 		paidAmount: row.paidAmount == null ? null : money(row.paidAmount),
 		creditedAmount: row.creditedAmount == null ? null : money(row.creditedAmount),
 		paymentOutcome: row.paymentOutcome || '',
+		provider: row.provider || '',
+		country: row.country || '',
+		localCurrency: row.localCurrency || '',
+		localAmount: row.localAmount == null ? null : Number(row.localAmount.toString()),
+		fxRate: row.fxRate == null ? null : Number(row.fxRate.toString()),
+		usdRate: row.usdRate == null ? null : Number(row.usdRate.toString()),
+		amountUsd: row.usdRate == null ? money(row.amount) : payoutUsd(row.amount, row.usdRate),
+		channel: row.channel || '',
+		payeeName: row.payeeName || '',
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString()
 	};
